@@ -8,7 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..models import RequestLog
 from .pricing import calculate_cost
 
-OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
+import os
+
+OPENAI_API_URL = os.environ.get("OPENAI_API_URL", "https://api.openai.com/v1/chat/completions")
 
 async def forward_and_log(
     payload: dict,
