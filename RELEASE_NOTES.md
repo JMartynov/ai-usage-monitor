@@ -1,5 +1,10 @@
 # Release Notes
 
+## [Unreleased]
+- **CI**: Added GitHub Actions Continuous Integration pipeline `.github/workflows/ci.yml` that runs linting, unit tests, and acceptance tests on pushes and PRs to main.
+- **Tests**: Added End-to-End Acceptance test script in `scripts/test_acceptance.py`.
+- **Requirements**: Added `flake8` to `requirements.txt`.
+
 ## v0.2.0 - Pricing Engine & Dashboard
 * Added `app/config/pricing.py` to support dynamic price configurations for different models.
 * Added `app/services/pricing.py` to accurately calculate request cost based on prompt and completion tokens.

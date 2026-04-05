@@ -18,3 +18,15 @@ Testing runs via `pytest`. Use the standard command to verify functionality:
 pytest app/tests/
 ```
 Tests automatically use an in-memory SQLite schema properly isolated per run.
+
+To run end-to-end acceptance tests:
+```bash
+python scripts/test_acceptance.py
+```
+Tests run automatically via GitHub Actions CI pipeline.
+
+## Linter
+Run linting with:
+```bash
+flake8 app/
+```

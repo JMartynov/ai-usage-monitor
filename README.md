@@ -197,6 +197,14 @@ http://localhost:8000/dashboard
 
 ---
 
+## 🔄 Continuous Integration
+
+We use GitHub Actions to automate our testing pipeline. Any push or pull request to the `main` branch will trigger:
+
+1. **Linting** with `flake8` to enforce style and syntax.
+2. **Unit and Integration Tests** with `pytest`.
+3. **Acceptance Tests** using a standalone script that spins up the app and a mock server to validate e2e usage.
+
 ## 📈 Future Improvements
 
 * Per-user analytics
