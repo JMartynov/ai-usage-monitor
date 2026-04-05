@@ -4,7 +4,7 @@ import respx
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
-from app.main import app
+from app.main import app as main_app
 from app.database import Base, get_db
 from app.models import RequestLog
 
@@ -25,11 +25,13 @@ async def override_get_db():
     async with TestingSessionLocal() as session:
         yield session
 
-app.dependency_overrides[get_db] = override_get_db
+main_app.dependency_overrides[get_db] = override_get_db
 
 @pytest.fixture(autouse=True)
 async def setup_test_db():
+    main_app.dependency_overrides[get_db] = override_get_db
     async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
     yield
     async with engine.begin() as conn:
@@ -51,7 +53,7 @@ async def test_successful_proxy():
     mock_route = respx.post(mock_url).mock(return_value=httpx.Response(200, json=mock_response_json))
 
     # 2. Send request to proxy
-    transport = httpx.ASGITransport(app=app)
+    transport = httpx.ASGITransport(app=main_app)
     client = httpx.AsyncClient(transport=transport, base_url="http://test")
     payload = {
         "model": "gpt-3.5-turbo",
@@ -98,7 +100,7 @@ async def test_upstream_error():
     mock_url = "https://api.openai.com/v1/chat/completions"
     respx.post(mock_url).mock(return_value=httpx.Response(400, json={"error": "bad request"}))
 
-    transport = httpx.ASGITransport(app=app)
+    transport = httpx.ASGITransport(app=main_app)
     client = httpx.AsyncClient(transport=transport, base_url="http://test")
     payload = {"model": "gpt-3.5-turbo", "messages": []}
 
@@ -124,7 +126,7 @@ async def test_timeout_error():
     mock_url = "https://api.openai.com/v1/chat/completions"
     respx.post(mock_url).mock(side_effect=httpx.TimeoutException("Timeout"))
 
-    transport = httpx.ASGITransport(app=app)
+    transport = httpx.ASGITransport(app=main_app)
     client = httpx.AsyncClient(transport=transport, base_url="http://test")
     payload = {"model": "gpt-3.5-turbo", "messages": []}
 
@@ -153,7 +155,7 @@ async def test_missing_usage():
     }
     respx.post(mock_url).mock(return_value=httpx.Response(200, json=mock_response_json))
 
-    transport = httpx.ASGITransport(app=app)
+    transport = httpx.ASGITransport(app=main_app)
     client = httpx.AsyncClient(transport=transport, base_url="http://test")
     payload = {"model": "gpt-3.5-turbo", "messages": [{"role": "user", "content": "Hi"}]}
 
@@ -189,7 +191,7 @@ async def test_header_filtering():
     }
     mock_route = respx.post(mock_url).mock(return_value=httpx.Response(200, json=mock_response_json))
 
-    transport = httpx.ASGITransport(app=app)
+    transport = httpx.ASGITransport(app=main_app)
     client = httpx.AsyncClient(transport=transport, base_url="http://test")
     payload = {"model": "gpt-3.5-turbo", "messages": [{"role": "user", "content": "Hi"}]}
     headers = {

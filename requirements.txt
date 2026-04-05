@@ -8,3 +8,4 @@ pytest
 pytest-asyncio
 respx
 pytest-httpx
+jinja2

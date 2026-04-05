@@ -6,6 +6,7 @@ from fastapi import Request, HTTPException
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..models import RequestLog
+from .pricing import calculate_cost
 
 OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 
@@ -62,6 +63,14 @@ async def forward_and_log(
     end_time = time.time()
     latency_ms = int((end_time - start_time) * 1000)
 
+    estimated_cost = None
+    if not error_message and prompt_tokens is not None and completion_tokens is not None:
+        estimated_cost = calculate_cost(
+            model,
+            prompt_tokens,
+            completion_tokens
+        )
+
     # Log to database
     log_entry = RequestLog(
         request_id=request_id,
@@ -71,6 +80,7 @@ async def forward_and_log(
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
         total_tokens=total_tokens,
+        estimated_cost=estimated_cost,
         latency_ms=latency_ms,
         error=error_message,
     )

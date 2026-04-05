@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text
+from sqlalchemy import Column, Integer, String, DateTime, Text, Float
 import datetime
 import uuid
 from .database import Base
@@ -15,5 +15,6 @@ class RequestLog(Base):
     prompt_tokens = Column(Integer, nullable=True)
     completion_tokens = Column(Integer, nullable=True)
     total_tokens = Column(Integer, nullable=True)
+    estimated_cost = Column(Float, nullable=True)
     latency_ms = Column(Integer, nullable=True)
     error = Column(String, nullable=True)
