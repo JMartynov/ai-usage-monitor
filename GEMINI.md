@@ -21,9 +21,10 @@ Before concluding any task, you MUST:
 0.  **Linting**: Run `npm run lint` to ensure code quality and adherence to style guides.
 1.  **Agentic Review**: Perform a self-review of your changes using `git diff`. Analyze the architecture, logic, and style. Fix any issues identified during this review before proceeding.
 2.  **Add tests**: Add unit tests for logic and integration tests for proxy/API endpoints if feature/fix implemented.
-3.  **Test Validation**: Run `npm test` and ensure ALL tests pass. Never suggest a change that breaks the existing suite.
-4.  **Documentation**: Update `README.md` to reflect changes in architecture, API endpoints, or environment variables.
-5.  **Manual Verification**: Verify proxy behavior using `curl` or a test script to ensure requests are correctly forwarded and logged.
+3.  **Add acceptance tests**: If a new major feature is implemented, you MUST add or update automated end-to-end (E2E) acceptance tests. These tests must install/run the project from a clean state, simulate a real-life scenario (e.g., sending traffic through the proxy, generating an alert), and formally validate the outcome.
+4.  **Test Validation**: Run `npm test` and ensure ALL tests pass. Never suggest a change that breaks the existing suite.
+5.  **Documentation**: Update `README.md` to reflect changes in architecture, API endpoints, or environment variables.
+6.  **Manual Verification**: Verify proxy behavior using `curl` or a test script to ensure requests are correctly forwarded and logged.
 
 ### 🛠️ Working Principles
 - **Incremental Progress**: Work in small, understandable steps. After each change, verify results and adjust if necessary.
