@@ -105,10 +105,9 @@ Client App → Proxy Server → LLM API
 
 ## 🛠️ Tech Stack (Suggested)
 
-* **Backend**: Node.js / Python (FastAPI)
-* **Proxy**: Express / FastAPI middleware
-* **Database**: PostgreSQL or SQLite (for MVP)
-* **Frontend**: React + simple charts (e.g. Chart.js)
+* **Backend**: Python (FastAPI)
+* **Database**: SQLite (via aiosqlite for MVP)
+* **Frontend**: React + simple charts (e.g. Chart.js) (Coming soon)
 * **Auth (optional)**: Basic API keys
 
 ---
@@ -117,31 +116,29 @@ Client App → Proxy Server → LLM API
 
 ### 1. Clone repo
 
-```
+```bash
 git clone https://github.com/yourname/ai-usage.git
 cd ai-usage
 ```
 
 ### 2. Install dependencies
 
-```
-npm install
+```bash
+pip install -r requirements.txt
 ```
 
 ### 3. Configure environment
 
 Create `.env`:
 
-```
-OPENAI_API_KEY=your_key_here
-DATABASE_URL=sqlite://./data.db
-PORT=3000
+```env
+DATABASE_URL=sqlite+aiosqlite:///./ai_usage.db
 ```
 
 ### 4. Run server
 
-```
-npm run dev
+```bash
+uvicorn app.main:app --reload
 ```
 
 ### 5. Point your app to proxy
@@ -155,7 +152,7 @@ https://api.openai.com/v1/chat/completions
 Use:
 
 ```
-http://localhost:3000/v1/chat/completions
+http://localhost:8000/v1/chat/completions
 ```
 
 ---
