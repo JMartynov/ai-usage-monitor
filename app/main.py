@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .database import engine, Base, get_db
 from .services.proxy import forward_and_log
+from .routers.dashboard import router as dashboard_router
 
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -13,6 +14,8 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(lifespan=lifespan)
+
+app.include_router(dashboard_router)
 
 @app.post("/v1/chat/completions")
 async def proxy_chat_completions(

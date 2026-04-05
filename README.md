@@ -94,12 +94,14 @@ Client App → Proxy Server → LLM API
 * Repeated prompts
 * Potential sensitive keywords (configurable)
 
-### Dashboard
+### Dashboard (New!)
 
 * Total usage
-* Cost overview
-* Model distribution
+* Cost overview (Line Chart)
+* Model distribution (Pie Chart)
+* Token breakdown (Doughnut Chart)
 * Recent activity feed
+* Top expensive requests
 
 ---
 
@@ -107,7 +109,7 @@ Client App → Proxy Server → LLM API
 
 * **Backend**: Python (FastAPI)
 * **Database**: SQLite (via aiosqlite for MVP)
-* **Frontend**: React + simple charts (e.g. Chart.js) (Coming soon)
+* **Frontend**: Jinja2 Templates + Chart.js for dashboard UI
 * **Auth (optional)**: Basic API keys
 
 ---
@@ -153,6 +155,14 @@ Use:
 
 ```
 http://localhost:8000/v1/chat/completions
+```
+
+### 6. View the Dashboard
+
+Open your browser to:
+
+```
+http://localhost:8000/dashboard
 ```
 
 ---

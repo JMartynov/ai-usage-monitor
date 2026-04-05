@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Usage Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .summary-cards {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .card {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            flex: 1;
+            margin: 0 10px;
+            text-align: center;
+        }
+        .card:first-child {
+            margin-left: 0;
+        }
+        .card:last-child {
+            margin-right: 0;
+        }
+        .card h3 {
+            margin: 0 0 10px 0;
+            color: #666;
+            font-size: 1.1em;
+        }
+        .card p {
+            font-size: 1.8em;
+            margin: 0;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .charts-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .chart-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            flex: 1;
+            margin: 0 10px;
+        }
+        .chart-container:first-child {
+            margin-left: 0;
+            flex: 2;
+        }
+        .chart-container:last-child {
+            margin-right: 0;
+        }
+        .tables-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .table-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            flex: 1;
+            margin: 0 10px;
+            overflow-x: auto;
+        }
+        .table-container:first-child {
+            margin-left: 0;
+        }
+        .table-container:last-child {
+            margin-right: 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            text-align: left;
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #f8f9fa;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AI Usage Dashboard</h1>
+
+        <div class="summary-cards">
+            <div class="card">
+                <h3>Total Requests</h3>
+                <p id="total-requests">0</p>
+            </div>
+            <div class="card">
+                <h3>Total Tokens</h3>
+                <p id="total-tokens">0</p>
+            </div>
+            <div class="card">
+                <h3>Total Cost</h3>
+                <p id="total-cost">$0.000000</p>
+            </div>
+        </div>
+
+        <div class="charts-row">
+            <div class="chart-container">
+                <h3>Cost Over Time</h3>
+                <canvas id="costChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3>Model Distribution</h3>
+                <canvas id="modelChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3>Token Breakdown</h3>
+                <canvas id="tokenChart"></canvas>
+            </div>
+        </div>
+
+        <div class="tables-row">
+            <div class="table-container">
+                <h3>Recent Activity Feed</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Model</th>
+                            <th>Prompt Prefix</th>
+                            <th>Cost</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recent-activity-body">
+                    </tbody>
+                </table>
+            </div>
+            <div class="table-container">
+                <h3>Top Expensive Requests</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Model</th>
+                            <th>Tokens</th>
+                            <th>Cost</th>
+                        </tr>
+                    </thead>
+                    <tbody id="expensive-requests-body">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function fetchStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
+
+                // Update summary cards
+                document.getElementById('total-requests').textContent = data.total.requests;
+                document.getElementById('total-tokens').textContent = data.total.tokens.toLocaleString();
+                document.getElementById('total-cost').textContent = '$' + data.total.cost.toFixed(6);
+
+                // Setup Cost Over Time Chart
+                const costCtx = document.getElementById('costChart').getContext('2d');
+                new Chart(costCtx, {
+                    type: 'line',
+                    data: {
+                        labels: data.cost_over_time.map(d => d.date),
+                        datasets: [{
+                            label: 'Daily Cost ($)',
+                            data: data.cost_over_time.map(d => d.cost),
+                            borderColor: 'rgb(75, 192, 192)',
+                            tension: 0.1,
+                            fill: false
+                        }]
+                    },
+                    options: { responsive: true }
+                });
+
+                // Setup Model Distribution Chart
+                const modelCtx = document.getElementById('modelChart').getContext('2d');
+                new Chart(modelCtx, {
+                    type: 'pie',
+                    data: {
+                        labels: data.model_distribution.map(d => d.model),
+                        datasets: [{
+                            data: data.model_distribution.map(d => d.cost),
+                            backgroundColor: [
+                                '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF'
+                            ]
+                        }]
+                    },
+                    options: { responsive: true, plugins: { title: { display: true, text: 'Cost by Model' } } }
+                });
+
+                // Setup Token Breakdown Chart
+                const tokenCtx = document.getElementById('tokenChart').getContext('2d');
+                new Chart(tokenCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Input Tokens', 'Output Tokens'],
+                        datasets: [{
+                            data: [data.token_breakdown.input, data.token_breakdown.output],
+                            backgroundColor: ['#36A2EB', '#FF6384']
+                        }]
+                    },
+                    options: { responsive: true }
+                });
+
+                // Populate Recent Activity Table
+                const recentBody = document.getElementById('recent-activity-body');
+                data.recent_activity.forEach(item => {
+                    const tr = document.createElement('tr');
+
+                    const tdTime = document.createElement('td');
+                    tdTime.textContent = new Date(item.timestamp).toLocaleString();
+
+                    const tdModel = document.createElement('td');
+                    tdModel.textContent = item.model;
+
+                    const tdPrompt = document.createElement('td');
+                    tdPrompt.textContent = item.prompt || 'N/A';
+
+                    const tdCost = document.createElement('td');
+                    tdCost.textContent = '$' + item.cost.toFixed(6);
+
+                    tr.appendChild(tdTime);
+                    tr.appendChild(tdModel);
+                    tr.appendChild(tdPrompt);
+                    tr.appendChild(tdCost);
+
+                    recentBody.appendChild(tr);
+                });
+
+                // Populate Expensive Requests Table
+                const expensiveBody = document.getElementById('expensive-requests-body');
+                data.expensive_requests.forEach(item => {
+                    const tr = document.createElement('tr');
+
+                    const tdTime = document.createElement('td');
+                    tdTime.textContent = new Date(item.timestamp).toLocaleString();
+
+                    const tdModel = document.createElement('td');
+                    tdModel.textContent = item.model;
+
+                    const tdTokens = document.createElement('td');
+                    tdTokens.textContent = item.tokens.toLocaleString();
+
+                    const tdCost = document.createElement('td');
+                    tdCost.textContent = '$' + item.cost.toFixed(6);
+
+                    tr.appendChild(tdTime);
+                    tr.appendChild(tdModel);
+                    tr.appendChild(tdTokens);
+                    tr.appendChild(tdCost);
+
+                    expensiveBody.appendChild(tr);
+                });
+
+            } catch (error) {
+                console.error("Error fetching dashboard stats:", error);
+            }
+        }
+
+        // Initialize dashboard
+        fetchStats();
+    </script>
+</body>
+</html>
