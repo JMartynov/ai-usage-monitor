@@ -102,6 +102,7 @@ Client App → Proxy Server → LLM API
 * Token breakdown (Doughnut Chart)
 * Recent activity feed
 * Top expensive requests
+* Anomalies & Budget alerts (via `/api/alerts`)
 
 ---
 

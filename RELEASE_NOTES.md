@@ -2,7 +2,8 @@
 
 ## [Unreleased]
 - **CI**: Added GitHub Actions Continuous Integration pipeline `.github/workflows/ci.yml` that runs linting, unit tests, and acceptance tests on pushes and PRs to main.
-- **Tests**: Added End-to-End Acceptance test script in `scripts/test_acceptance.py`.
+- **Tests**: Added End-to-End Acceptance test script in `scripts/test_acceptance.py` to simulate a real-world user setting up and running traffic.
+- **Features**: Added `/api/alerts` endpoint for anomaly/budget alerts checking based on high token or high cost thresholds.
 - **Requirements**: Added `flake8` to `requirements.txt`.
 
 ## v0.2.0 - Pricing Engine & Dashboard
