@@ -1,6 +1,10 @@
 # Release Notes
 
 ## [Unreleased]
+- **Alerting System**: Implemented an active alerting system in `app/services/alerts.py` to monitor daily/monthly budgets and detect cost/token anomalies.
+- **Alerting Configuration**: Added dynamic configuration thresholds in `app/config/alerts.py`.
+- **Database**: Extended `app/models.py` with an `Alert` table to persistently store detected alerts and display them in the Dashboard's History Panel.
+- **Guardrails**: Added automatic proxy guardrails ensuring hard budget cutoff and model downgrades to prevent overrun.
 - **CI**: Added GitHub Actions Continuous Integration pipeline `.github/workflows/ci.yml` that runs linting, unit tests, and acceptance tests on pushes and PRs to main.
 - **Tests**: Added End-to-End Acceptance test script in `scripts/test_acceptance.py` to simulate a real-world user setting up and running traffic.
 - **Features**: Added `/api/alerts` endpoint for anomaly/budget alerts checking based on high token or high cost thresholds.

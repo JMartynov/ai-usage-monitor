@@ -4,6 +4,19 @@ import uuid
 from .database import Base
 
 
+class Alert(Base):
+    __tablename__ = "alerts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    type = Column(String, index=True)
+    message = Column(Text)
+    severity = Column(String)
+    created_at = Column(
+        DateTime,
+        default=lambda: datetime.datetime.now(
+            datetime.timezone.utc))
+
+
 class RequestLog(Base):
     __tablename__ = "requests"
 

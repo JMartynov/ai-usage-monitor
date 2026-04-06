@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc, text
 
 from ..database import get_db
-from ..models import RequestLog
+from ..models import RequestLog, Alert
 from typing import Dict, Any
 
 router = APIRouter()
@@ -143,45 +143,20 @@ async def api_stats(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
 
 @router.get("/api/alerts")
 async def api_alerts(db: AsyncSession = Depends(get_db)):
-    # Simple alert logic: any request costing > $1.00 or > 100000 tokens
-    cost_threshold = 1.00
-    tokens_threshold = 100000
-
     alerts_query = await db.execute(
-        select(RequestLog)
-        .where(
-            (RequestLog.estimated_cost > cost_threshold) |
-            (RequestLog.total_tokens > tokens_threshold)
-        )
-        .order_by(desc(RequestLog.timestamp))
+        select(Alert)
+        .order_by(desc(Alert.created_at))
         .limit(50)
     )
 
     alerts = []
     for row in alerts_query.scalars():
-        alert_type = "cost" if (
-            row.estimated_cost and row.estimated_cost > cost_threshold
-        ) else "budget"
-
-        cost_display = (
-            f"{row.estimated_cost}$" if row.estimated_cost is not None
-            else "Unknown cost"
-        )
-
-        reason = 'cost' if alert_type == 'cost' else 'token usage'
-        message = (
-            f"High {reason} detected: {cost_display} / "
-            f"{row.total_tokens} tokens"
-        )
-
         alerts.append({
             "id": row.id,
-            "type": alert_type,
-            "model": row.model,
-            "cost": float(row.estimated_cost or 0),
-            "tokens": int(row.total_tokens or 0),
-            "timestamp": row.timestamp.isoformat(),
-            "message": message
+            "type": row.type,
+            "message": row.message,
+            "severity": row.severity,
+            "timestamp": row.created_at.isoformat() if row.created_at else None
         })
 
     return alerts

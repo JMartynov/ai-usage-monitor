@@ -110,6 +110,13 @@ Client App → Proxy Server → LLM API
 * Support for variable input/output token pricing per model.
 * Fallback to default pricing for unknown models.
 
+### Alerting System (New!)
+
+* Active cost control system to monitor budget overruns.
+* Evaluates cost spikes, budget limits, and anomalous token usage per request.
+* Dashboard integration via alert banners and a persistent alert history panel.
+* Automatic Guardrails: hard budget cutoffs and model downgrades.
+
 ---
 
 ## 🛠️ Tech Stack (Suggested)
@@ -216,7 +223,7 @@ We use GitHub Actions to automate our testing pipeline. Any push or pull request
 
 * Per-user analytics
 * Rate limiting
-* Budget alerts
+* Webhook Support for Alerting
 * Team dashboards
 * Role-based access
 * Multi-provider support
