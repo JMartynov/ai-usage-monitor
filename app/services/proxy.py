@@ -2,7 +2,6 @@ import json
 import time
 import uuid
 import httpx
-from fastapi import Request, HTTPException
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..models import RequestLog
@@ -10,7 +9,10 @@ from .pricing import calculate_cost
 
 import os
 
-OPENAI_API_URL = os.environ.get("OPENAI_API_URL", "https://api.openai.com/v1/chat/completions")
+OPENAI_API_URL = os.environ.get(
+    "OPENAI_API_URL", "https://api.openai.com/v1/chat/completions"
+)
+
 
 async def forward_and_log(
     payload: dict,
@@ -22,9 +24,12 @@ async def forward_and_log(
 
     # Filter headers (keep Authorization, omit Host, Content-Length)
     proxy_headers = {
-        k: v for k, v in headers.items()
-        if k.lower() not in ("host", "content-length", "connection", "accept-encoding")
-    }
+        k: v for k,
+        v in headers.items() if k.lower() not in (
+            "host",
+            "content-length",
+            "connection",
+            "accept-encoding")}
 
     model = payload.get("model", "unknown")
     messages = payload.get("messages", [])
@@ -66,7 +71,8 @@ async def forward_and_log(
     latency_ms = int((end_time - start_time) * 1000)
 
     estimated_cost = None
-    if not error_message and prompt_tokens is not None and completion_tokens is not None:
+    if not error_message and prompt_tokens is not None and \
+            completion_tokens is not None:
         estimated_cost = calculate_cost(
             model,
             prompt_tokens,
@@ -90,7 +96,7 @@ async def forward_and_log(
     db.add(log_entry)
     try:
         await db.commit()
-    except Exception as e:
+    except Exception:
         await db.rollback()
         # In a real app we'd log this fallback error
 

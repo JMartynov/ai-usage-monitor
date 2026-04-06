@@ -21,11 +21,13 @@ TestingSessionLocal = sessionmaker(
     engine, class_=AsyncSession, expire_on_commit=False
 )
 
+
 async def override_get_db():
     async with TestingSessionLocal() as session:
         yield session
 
 main_app.dependency_overrides[get_db] = override_get_db
+
 
 @pytest.fixture(autouse=True)
 async def setup_test_db():
@@ -36,6 +38,7 @@ async def setup_test_db():
     yield
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+
 
 @pytest.mark.asyncio
 @respx.mock
@@ -50,7 +53,9 @@ async def test_successful_proxy():
             "total_tokens": 12
         }
     }
-    mock_route = respx.post(mock_url).mock(return_value=httpx.Response(200, json=mock_response_json))
+    mock_route = respx.post(mock_url).mock(
+        return_value=httpx.Response(
+            200, json=mock_response_json))
 
     # 2. Send request to proxy
     transport = httpx.ASGITransport(app=main_app)
@@ -64,7 +69,8 @@ async def test_successful_proxy():
         "Authorization": "Bearer test-key"
     }
 
-    response = await client.post("/v1/chat/completions", json=payload, headers=headers)
+    response = await client.post(
+        "/v1/chat/completions", json=payload, headers=headers)
 
     # Verify response passthrough
     assert response.status_code == 200
@@ -75,7 +81,10 @@ async def test_successful_proxy():
     upstream_request = mock_route.calls.last.request
     assert upstream_request.url == mock_url
     assert upstream_request.headers.get("Authorization") == "Bearer test-key"
-    assert "temperature" in httpx.Request(upstream_request.method, upstream_request.url, content=upstream_request.content).content.decode()
+    assert "temperature" in httpx.Request(
+        upstream_request.method,
+        upstream_request.url,
+        content=upstream_request.content).content.decode()
 
     # 4. Verify database
     async with TestingSessionLocal() as session:
@@ -94,11 +103,15 @@ async def test_successful_proxy():
         assert log.response is not None
         assert log.error is None
 
+
 @pytest.mark.asyncio
 @respx.mock
 async def test_upstream_error():
     mock_url = "https://api.openai.com/v1/chat/completions"
-    respx.post(mock_url).mock(return_value=httpx.Response(400, json={"error": "bad request"}))
+    respx.post(mock_url).mock(
+        return_value=httpx.Response(
+            400, json={
+                "error": "bad request"}))
 
     transport = httpx.ASGITransport(app=main_app)
     client = httpx.AsyncClient(transport=transport, base_url="http://test")
@@ -114,11 +127,13 @@ async def test_upstream_error():
         result = await session.execute(select(RequestLog))
         logs = result.scalars().all()
         # Find the log for this specific test
-        log = [l for l in logs if l.error == "Upstream error 400"][0]
+        log = [log_item for log_item in logs
+               if log_item.error == "Upstream error 400"][0]
 
         assert log.error == "Upstream error 400"
         assert log.response is None
         assert log.prompt_tokens is None
+
 
 @pytest.mark.asyncio
 @respx.mock
@@ -140,11 +155,13 @@ async def test_timeout_error():
         from sqlalchemy import select
         result = await session.execute(select(RequestLog))
         logs = result.scalars().all()
-        log = [l for l in logs if "Timeout" in (l.error or "")][0]
+        log = [log_item for log_item in logs
+               if "Timeout" in (log_item.error or "")][0]
 
         assert "Timeout" in log.error
         assert log.response is None
         assert log.prompt_tokens is None
+
 
 @pytest.mark.asyncio
 @respx.mock
@@ -153,11 +170,14 @@ async def test_missing_usage():
     mock_response_json = {
         "choices": [{"message": {"content": "Hello"}}],
     }
-    respx.post(mock_url).mock(return_value=httpx.Response(200, json=mock_response_json))
+    respx.post(mock_url).mock(
+        return_value=httpx.Response(
+            200, json=mock_response_json))
 
     transport = httpx.ASGITransport(app=main_app)
     client = httpx.AsyncClient(transport=transport, base_url="http://test")
-    payload = {"model": "gpt-3.5-turbo", "messages": [{"role": "user", "content": "Hi"}]}
+    payload = {"model": "gpt-3.5-turbo",
+               "messages": [{"role": "user", "content": "Hi"}]}
 
     response = await client.post("/v1/chat/completions", json=payload)
 
@@ -169,13 +189,15 @@ async def test_missing_usage():
         result = await session.execute(select(RequestLog))
         logs = result.scalars().all()
         # Find the log with no usage and no error
-        log = [l for l in logs if l.prompt_tokens is None and l.error is None][0]
+        log = [log_item for log_item in logs
+               if log_item.prompt_tokens is None and log_item.error is None][0]
 
         assert log.error is None
         assert log.response is not None
         assert log.prompt_tokens is None
         assert log.completion_tokens is None
         assert log.total_tokens is None
+
 
 @pytest.mark.asyncio
 @respx.mock
@@ -189,11 +211,14 @@ async def test_header_filtering():
             "total_tokens": 12
         }
     }
-    mock_route = respx.post(mock_url).mock(return_value=httpx.Response(200, json=mock_response_json))
+    mock_route = respx.post(mock_url).mock(
+        return_value=httpx.Response(
+            200, json=mock_response_json))
 
     transport = httpx.ASGITransport(app=main_app)
     client = httpx.AsyncClient(transport=transport, base_url="http://test")
-    payload = {"model": "gpt-3.5-turbo", "messages": [{"role": "user", "content": "Hi"}]}
+    payload = {"model": "gpt-3.5-turbo",
+               "messages": [{"role": "user", "content": "Hi"}]}
     headers = {
         "Authorization": "Bearer test-key",
         "Host": "localhost:8000",
@@ -201,7 +226,8 @@ async def test_header_filtering():
         "X-Custom": "Value"
     }
 
-    response = await client.post("/v1/chat/completions", json=payload, headers=headers)
+    response = await client.post(
+        "/v1/chat/completions", json=payload, headers=headers)
     assert response.status_code == 200
 
     assert mock_route.called
@@ -210,6 +236,8 @@ async def test_header_filtering():
 
     assert sent_headers.get("authorization") == "Bearer test-key"
     assert "x-custom" in sent_headers
-    # Host and Content-Length might be re-added by httpx, but our proxy shouldn't pass the original ones directly.
-    # The proxy removes "host", "content-length", "connection", "accept-encoding".
+    # Host and Content-Length might be re-added by httpx,
+    # but our proxy shouldn't pass the original ones directly.
+    # The proxy removes "host", "content-length",
+    # "connection", "accept-encoding".
     # X-Custom should be forwarded.

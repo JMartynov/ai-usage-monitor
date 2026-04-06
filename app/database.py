@@ -7,7 +7,11 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./ai_usage.db")
 engine = create_async_engine(
     DATABASE_URL,
     echo=False,
-    connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+    connect_args=(
+        {"check_same_thread": False}
+        if DATABASE_URL.startswith("sqlite")
+        else {}
+    ),
 )
 
 async_session_maker = sessionmaker(
@@ -15,6 +19,7 @@ async_session_maker = sessionmaker(
 )
 
 Base = declarative_base()
+
 
 async def get_db():
     async with async_session_maker() as session:

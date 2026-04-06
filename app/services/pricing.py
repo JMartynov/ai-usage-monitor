@@ -1,6 +1,10 @@
 from app.config.pricing import MODEL_PRICING, DEFAULT_PRICING
 
-def calculate_cost(model: str, prompt_tokens: int, completion_tokens: int) -> float:
+
+def calculate_cost(
+        model: str,
+        prompt_tokens: int,
+        completion_tokens: int) -> float:
     if prompt_tokens is None:
         prompt_tokens = 0
     if completion_tokens is None:

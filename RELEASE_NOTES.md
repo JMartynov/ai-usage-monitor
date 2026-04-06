@@ -7,12 +7,12 @@
 - **Requirements**: Added `flake8` to `requirements.txt`.
 
 ## v0.2.0 - Pricing Engine & Dashboard
-* Added `app/config/pricing.py` to support dynamic price configurations for different models.
-* Added `app/services/pricing.py` to accurately calculate request cost based on prompt and completion tokens.
-* Extended database schema in `app/models.py` to store estimated cost per request.
-* Implemented the Dashboard UI available at `/dashboard` using Jinja2 Templates and Chart.js.
-* Added `/api/stats` endpoint for retrieving aggregations on cost, tokens, and model distribution.
-* Extended `pytest` suite for new endpoint and proxy integrations.
+* **Pricing Engine**: Added `app/config/pricing.py` to support dynamic price configurations for different models.
+* **Pricing Engine**: Added `app/services/pricing.py` to accurately calculate request cost based on prompt and completion tokens.
+* **Database**: Extended database schema in `app/models.py` to store `estimated_cost` per request.
+* **Dashboard**: Implemented the Dashboard UI available at `/dashboard` using Jinja2 Templates and Chart.js.
+* **Dashboard API**: Added `/api/stats` endpoint for retrieving aggregations on cost, tokens, and model distribution.
+* **Testing**: Extended `pytest` suite for new endpoint and proxy integrations, ensuring pricing and dashboard features work correctly.
 
 ## v0.1.0 - Initial AI Proxy Implementation
 * Migrated MVP tech stack to Python/FastAPI using aiosqlite for database persistence.

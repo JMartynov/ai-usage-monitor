@@ -13,6 +13,7 @@ MODEL_PRICING = {
     }
 }
 
+# Default fallback pricing
 DEFAULT_PRICING = {
     "input_per_1k": 0.002,
     "output_per_1k": 0.008
