@@ -34,5 +34,8 @@ flake8 app/
 ## Dashboard & Pricing
 The new Dashboard and Pricing Engine are now fully integrated. The Dashboard aggregates data such as total usage, cost over time, model distribution, token breakdown, and provides a recent activity feed and top expensive requests view.
 
+## Alerting Engine
+The Active Alerting System evaluates proxy logs for potential budget overruns and cost/token anomalies. Thresholds are configured inside `app/config/alerts.py`. It integrates with Guardrails to automatically enforce model downgrades and cut off usage on breached budgets.
+
 ## Updates
-* Ensure you regularly run `scripts/test_acceptance.py` to test the E2E flow including `/api/alerts` validation!
+* Ensure you regularly run `scripts/test_acceptance.py` to test the E2E flow including `/api/alerts` and the Active Alerting functionality validation!

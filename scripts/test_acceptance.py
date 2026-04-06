@@ -138,7 +138,7 @@ async def main():
             alerts = r.json()
             # Assuming high-cost triggered an alert
             assert len(alerts) > 0, "No alerts found"
-            assert any(a["type"] == "cost" or a["type"] == "budget" for a in alerts), "No cost or budget alert found"
+            assert any(a["type"] == "HIGH_COST_REQUEST" for a in alerts), f"No high cost request alert found. Got: {alerts}"
 
         print("Acceptance tests passed successfully!")
 

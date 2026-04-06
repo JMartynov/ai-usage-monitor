@@ -105,11 +105,55 @@
         th {
             background-color: #f8f9fa;
         }
+        /* Add alert styles to existing styles */
+        .alert-banner {
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            display: none;
+            font-weight: bold;
+        }
+        .alert-critical {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            display: block;
+        }
+        .alert-warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+            display: block;
+        }
+        .alert-info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+            display: block;
+        }
+        .badge {
+            display: inline-block;
+            padding: 0.25em 0.4em;
+            font-size: 75%;
+            font-weight: 700;
+            line-height: 1;
+            text-align: center;
+            white-space: nowrap;
+            vertical-align: baseline;
+            border-radius: 0.25rem;
+        }
+        .badge-critical { background-color: #dc3545; color: white; }
+        .badge-warning { background-color: #ffc107; color: black; }
+        .badge-info { background-color: #17a2b8; color: white; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>AI Usage Dashboard</h1>
+
+        <div id="alert-banner" class="alert-banner">
+            <!-- Alert banner content injected here -->
+        </div>
 
         <div class="summary-cards">
             <div class="card">
@@ -138,6 +182,24 @@
             <div class="chart-container">
                 <h3>Token Breakdown</h3>
                 <canvas id="tokenChart"></canvas>
+            </div>
+        </div>
+
+        <div class="tables-row">
+            <div class="table-container" style="flex: 2;">
+                <h3>Alert History</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Severity</th>
+                            <th>Type</th>
+                            <th>Message</th>
+                        </tr>
+                    </thead>
+                    <tbody id="alert-history-body">
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -288,8 +350,55 @@
             }
         }
 
+        async function fetchAlerts() {
+            try {
+                const response = await fetch('/api/alerts');
+                const alerts = await response.json();
+
+                const alertBody = document.getElementById('alert-history-body');
+                const alertBanner = document.getElementById('alert-banner');
+                alertBody.innerHTML = ''; // Clear previous
+
+                if (alerts.length > 0) {
+                    // Update banner with latest alert
+                    const latestAlert = alerts[0];
+                    alertBanner.textContent = latestAlert.message;
+                    alertBanner.className = 'alert-banner alert-' + (latestAlert.severity || 'info');
+
+                    alerts.forEach(alert => {
+                        const tr = document.createElement('tr');
+
+                        const tdTime = document.createElement('td');
+                        tdTime.textContent = new Date(alert.timestamp).toLocaleString();
+
+                        const tdSeverity = document.createElement('td');
+                        const severityBadge = document.createElement('span');
+                        severityBadge.className = 'badge badge-' + (alert.severity || 'info');
+                        severityBadge.textContent = (alert.severity || 'info').toUpperCase();
+                        tdSeverity.appendChild(severityBadge);
+
+                        const tdType = document.createElement('td');
+                        tdType.textContent = alert.type;
+
+                        const tdMessage = document.createElement('td');
+                        tdMessage.textContent = alert.message;
+
+                        tr.appendChild(tdTime);
+                        tr.appendChild(tdSeverity);
+                        tr.appendChild(tdType);
+                        tr.appendChild(tdMessage);
+
+                        alertBody.appendChild(tr);
+                    });
+                }
+            } catch (error) {
+                console.error("Error fetching alerts:", error);
+            }
+        }
+
         // Initialize dashboard
         fetchStats();
+        fetchAlerts();
     </script>
 </body>
 </html>
