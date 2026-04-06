@@ -30,3 +30,6 @@ Run linting with:
 ```bash
 flake8 app/
 ```
+
+## Updates
+* Ensure you regularly run `scripts/test_acceptance.py` to test the E2E flow including `/api/alerts` validation!

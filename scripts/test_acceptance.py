@@ -134,13 +134,11 @@ async def main():
 
             print("Validating alerts...")
             r = await client.get("http://127.0.0.1:8000/api/alerts")
-            if r.status_code == 200:
-                alerts = r.json()
-                # Assuming high-cost triggered an alert
-                assert len(alerts) > 0
-                assert any(a["type"] == "cost" or a["type"] == "budget" for a in alerts)
-            else:
-                print(f"Warning: Alerts endpoint not implemented or failed: {r.status_code}")
+            assert r.status_code == 200, f"Alerts endpoint failed with status {r.status_code}"
+            alerts = r.json()
+            # Assuming high-cost triggered an alert
+            assert len(alerts) > 0, "No alerts found"
+            assert any(a["type"] == "cost" or a["type"] == "budget" for a in alerts), "No cost or budget alert found"
 
         print("Acceptance tests passed successfully!")
 
