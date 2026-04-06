@@ -3,11 +3,8 @@ import httpx
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
-import contextlib
 from fastapi import FastAPI
 from app.main import app as main_app
-from app.database import Base, get_db
-from app.models import RequestLog
 from app.database import Base, get_db
 from app.models import RequestLog
 import datetime
@@ -25,6 +22,7 @@ TestingSessionLocal = sessionmaker(
     engine, class_=AsyncSession, expire_on_commit=False
 )
 
+
 async def override_get_db():
     async with TestingSessionLocal() as session:
         yield session
@@ -34,6 +32,7 @@ for route in main_app.routes:
     app.routes.append(route)
 
 app.dependency_overrides[get_db] = override_get_db
+
 
 @pytest.fixture(autouse=True)
 async def setup_test_db():
@@ -70,6 +69,7 @@ async def setup_test_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
 
+
 @pytest.mark.asyncio
 async def test_dashboard_ui():
     main_app.dependency_overrides[get_db] = override_get_db
@@ -79,6 +79,7 @@ async def test_dashboard_ui():
     response = await client.get("/dashboard")
     assert response.status_code == 200
     assert "AI Usage Dashboard" in response.text
+
 
 @pytest.mark.asyncio
 async def test_dashboard_api_stats():

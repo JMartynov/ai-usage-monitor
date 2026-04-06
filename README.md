@@ -104,6 +104,12 @@ Client App → Proxy Server → LLM API
 * Top expensive requests
 * Anomalies & Budget alerts (via `/api/alerts`)
 
+### Pricing Engine (New!)
+
+* `estimated_cost` tracking per request.
+* Support for variable input/output token pricing per model.
+* Fallback to default pricing for unknown models.
+
 ---
 
 ## 🛠️ Tech Stack (Suggested)

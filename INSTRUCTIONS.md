@@ -31,5 +31,8 @@ Run linting with:
 flake8 app/
 ```
 
+## Dashboard & Pricing
+The new Dashboard and Pricing Engine are now fully integrated. The Dashboard aggregates data such as total usage, cost over time, model distribution, token breakdown, and provides a recent activity feed and top expensive requests view.
+
 ## Updates
 * Ensure you regularly run `scripts/test_acceptance.py` to test the E2E flow including `/api/alerts` validation!

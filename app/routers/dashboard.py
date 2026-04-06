@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Request
+
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,14 +8,15 @@ from sqlalchemy import select, func, desc, text
 from ..database import get_db
 from ..models import RequestLog
 from typing import Dict, Any
-import datetime
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
 
+
 @router.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request):
     return templates.TemplateResponse(request=request, name="dashboard.html")
+
 
 @router.get("/api/stats")
 async def api_stats(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
@@ -22,10 +24,12 @@ async def api_stats(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
     total_requests_query = await db.execute(select(func.count(RequestLog.id)))
     total_requests = total_requests_query.scalar_one()
 
-    total_tokens_query = await db.execute(select(func.sum(RequestLog.total_tokens)))
+    total_tokens_query = await db.execute(
+        select(func.sum(RequestLog.total_tokens)))
     total_tokens = total_tokens_query.scalar_one() or 0
 
-    total_cost_query = await db.execute(select(func.sum(RequestLog.estimated_cost)))
+    total_cost_query = await db.execute(
+        select(func.sum(RequestLog.estimated_cost)))
     total_cost = total_cost_query.scalar_one() or 0.0
 
     # 2. Cost Over Time (grouped by day)
@@ -69,8 +73,12 @@ async def api_stats(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
     )
     token_breakdown_result = token_breakdown_query.first()
     token_breakdown = {
-        "input": int(token_breakdown_result.input_tokens or 0) if token_breakdown_result else 0,
-        "output": int(token_breakdown_result.output_tokens or 0) if token_breakdown_result else 0
+        "input": int(
+            token_breakdown_result.input_tokens or 0
+        ) if token_breakdown_result else 0,
+        "output": int(
+            token_breakdown_result.output_tokens or 0
+        ) if token_breakdown_result else 0
     }
 
     # 5. Recent Activity Feed (last 20)
@@ -87,7 +95,11 @@ async def api_stats(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
         {
             "id": row.id,
             "model": row.model,
-            "prompt": (row.prompt[:100] + "...") if row.prompt and len(row.prompt) > 100 else row.prompt,
+            "prompt": (
+                (row.prompt[:97] + "...")
+                if row.prompt and len(row.prompt) > 100
+                else row.prompt
+            ),
             "cost": float(row.estimated_cost or 0),
             "timestamp": row.timestamp.isoformat()
         }
