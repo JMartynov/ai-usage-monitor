@@ -13,19 +13,16 @@ import datetime
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
 engine = create_async_engine(
-    TEST_DATABASE_URL,
-    echo=False,
-    connect_args={"check_same_thread": False}
+    TEST_DATABASE_URL, echo=False, connect_args={"check_same_thread": False}
 )
 
-TestingSessionLocal = sessionmaker(
-    engine, class_=AsyncSession, expire_on_commit=False
-)
+TestingSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
 async def override_get_db():
     async with TestingSessionLocal() as session:
         yield session
+
 
 app = FastAPI()
 for route in main_app.routes:
@@ -50,7 +47,7 @@ async def setup_test_db():
                 completion_tokens=20,
                 total_tokens=30,
                 estimated_cost=0.001,
-                timestamp=datetime.datetime.now(datetime.timezone.utc)
+                timestamp=datetime.datetime.now(datetime.timezone.utc),
             ),
             RequestLog(
                 model="gpt-4o-mini",
@@ -59,8 +56,8 @@ async def setup_test_db():
                 completion_tokens=10,
                 total_tokens=15,
                 estimated_cost=0.0005,
-                timestamp=datetime.datetime.now(datetime.timezone.utc)
-            )
+                timestamp=datetime.datetime.now(datetime.timezone.utc),
+            ),
         ]
         session.add_all(logs)
         await session.commit()

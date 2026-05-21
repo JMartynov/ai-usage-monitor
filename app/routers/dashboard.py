@@ -24,12 +24,10 @@ async def api_stats(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
     total_requests_query = await db.execute(select(func.count(RequestLog.id)))
     total_requests = total_requests_query.scalar_one()
 
-    total_tokens_query = await db.execute(
-        select(func.sum(RequestLog.total_tokens)))
+    total_tokens_query = await db.execute(select(func.sum(RequestLog.total_tokens)))
     total_tokens = total_tokens_query.scalar_one() or 0
 
-    total_cost_query = await db.execute(
-        select(func.sum(RequestLog.estimated_cost)))
+    total_cost_query = await db.execute(select(func.sum(RequestLog.estimated_cost)))
     total_cost = total_cost_query.scalar_one() or 0.0
 
     # 2. Cost Over Time (grouped by day)
@@ -37,8 +35,10 @@ async def api_stats(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
     cost_over_time_query = await db.execute(
         select(
             func.date(RequestLog.timestamp).label("date"),
-            func.sum(RequestLog.estimated_cost).label("daily_cost")
-        ).group_by(text("date")).order_by(text("date"))
+            func.sum(RequestLog.estimated_cost).label("daily_cost"),
+        )
+        .group_by(text("date"))
+        .order_by(text("date"))
     )
     cost_over_time = [
         {"date": str(row.date), "cost": float(row.daily_cost or 0)}
@@ -51,7 +51,7 @@ async def api_stats(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
             RequestLog.model,
             func.count(RequestLog.id).label("request_count"),
             func.sum(RequestLog.total_tokens).label("tokens"),
-            func.sum(RequestLog.estimated_cost).label("cost")
+            func.sum(RequestLog.estimated_cost).label("cost"),
         ).group_by(RequestLog.model)
     )
     model_distribution = [
@@ -59,7 +59,7 @@ async def api_stats(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
             "model": row.model,
             "requests": row.request_count,
             "tokens": int(row.tokens or 0),
-            "cost": float(row.cost or 0)
+            "cost": float(row.cost or 0),
         }
         for row in model_dist_query
     ]
@@ -68,17 +68,17 @@ async def api_stats(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
     token_breakdown_query = await db.execute(
         select(
             func.sum(RequestLog.prompt_tokens).label("input_tokens"),
-            func.sum(RequestLog.completion_tokens).label("output_tokens")
+            func.sum(RequestLog.completion_tokens).label("output_tokens"),
         )
     )
     token_breakdown_result = token_breakdown_query.first()
     token_breakdown = {
-        "input": int(
-            token_breakdown_result.input_tokens or 0
-        ) if token_breakdown_result else 0,
-        "output": int(
-            token_breakdown_result.output_tokens or 0
-        ) if token_breakdown_result else 0
+        "input": int(token_breakdown_result.input_tokens or 0)
+        if token_breakdown_result
+        else 0,
+        "output": int(token_breakdown_result.output_tokens or 0)
+        if token_breakdown_result
+        else 0,
     }
 
     # 5. Recent Activity Feed (last 20)
@@ -88,8 +88,10 @@ async def api_stats(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
             RequestLog.model,
             RequestLog.prompt,
             RequestLog.estimated_cost,
-            RequestLog.timestamp
-        ).order_by(desc(RequestLog.timestamp)).limit(20)
+            RequestLog.timestamp,
+        )
+        .order_by(desc(RequestLog.timestamp))
+        .limit(20)
     )
     recent_activity = [
         {
@@ -101,7 +103,7 @@ async def api_stats(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
                 else row.prompt
             ),
             "cost": float(row.estimated_cost or 0),
-            "timestamp": row.timestamp.isoformat()
+            "timestamp": row.timestamp.isoformat(),
         }
         for row in recent_activity_query
     ]
@@ -113,8 +115,10 @@ async def api_stats(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
             RequestLog.model,
             RequestLog.estimated_cost,
             RequestLog.total_tokens,
-            RequestLog.timestamp
-        ).order_by(desc(RequestLog.estimated_cost)).limit(10)
+            RequestLog.timestamp,
+        )
+        .order_by(desc(RequestLog.estimated_cost))
+        .limit(10)
     )
     expensive_requests = [
         {
@@ -122,7 +126,7 @@ async def api_stats(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
             "model": row.model,
             "cost": float(row.estimated_cost or 0),
             "tokens": int(row.total_tokens or 0),
-            "timestamp": row.timestamp.isoformat()
+            "timestamp": row.timestamp.isoformat(),
         }
         for row in expensive_requests_query
     ]
@@ -131,13 +135,13 @@ async def api_stats(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
         "total": {
             "requests": total_requests,
             "tokens": int(total_tokens),
-            "cost": float(total_cost)
+            "cost": float(total_cost),
         },
         "cost_over_time": cost_over_time,
         "model_distribution": model_distribution,
         "token_breakdown": token_breakdown,
         "recent_activity": recent_activity,
-        "expensive_requests": expensive_requests
+        "expensive_requests": expensive_requests,
     }
 
 
@@ -150,8 +154,8 @@ async def api_alerts(db: AsyncSession = Depends(get_db)):
     alerts_query = await db.execute(
         select(RequestLog)
         .where(
-            (RequestLog.estimated_cost > cost_threshold) |
-            (RequestLog.total_tokens > tokens_threshold)
+            (RequestLog.estimated_cost > cost_threshold)
+            | (RequestLog.total_tokens > tokens_threshold)
         )
         .order_by(desc(RequestLog.timestamp))
         .limit(50)
@@ -159,29 +163,31 @@ async def api_alerts(db: AsyncSession = Depends(get_db)):
 
     alerts = []
     for row in alerts_query.scalars():
-        alert_type = "cost" if (
-            row.estimated_cost and row.estimated_cost > cost_threshold
-        ) else "budget"
+        alert_type = (
+            "cost"
+            if (row.estimated_cost and row.estimated_cost > cost_threshold)
+            else "budget"
+        )
 
         cost_display = (
-            f"{row.estimated_cost}$" if row.estimated_cost is not None
+            f"{row.estimated_cost}$"
+            if row.estimated_cost is not None
             else "Unknown cost"
         )
 
-        reason = 'cost' if alert_type == 'cost' else 'token usage'
-        message = (
-            f"High {reason} detected: {cost_display} / "
-            f"{row.total_tokens} tokens"
-        )
+        reason = "cost" if alert_type == "cost" else "token usage"
+        message = f"High {reason} detected: {cost_display} / {row.total_tokens} tokens"
 
-        alerts.append({
-            "id": row.id,
-            "type": alert_type,
-            "model": row.model,
-            "cost": float(row.estimated_cost or 0),
-            "tokens": int(row.total_tokens or 0),
-            "timestamp": row.timestamp.isoformat(),
-            "message": message
-        })
+        alerts.append(
+            {
+                "id": row.id,
+                "type": alert_type,
+                "model": row.model,
+                "cost": float(row.estimated_cost or 0),
+                "tokens": int(row.total_tokens or 0),
+                "timestamp": row.timestamp.isoformat(),
+                "message": message,
+            }
+        )
 
     return alerts

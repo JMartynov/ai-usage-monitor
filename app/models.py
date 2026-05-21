@@ -10,9 +10,8 @@ class RequestLog(Base):
     id = Column(Integer, primary_key=True, index=True)
     request_id = Column(String, index=True, default=lambda: str(uuid.uuid4()))
     timestamp = Column(
-        DateTime,
-        default=lambda: datetime.datetime.now(
-            datetime.timezone.utc))
+        DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc)
+    )
     model = Column(String, index=True)
     prompt = Column(Text, nullable=True)
     response = Column(Text, nullable=True)
