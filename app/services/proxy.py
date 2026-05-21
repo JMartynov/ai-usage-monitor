@@ -18,18 +18,18 @@ async def forward_and_log(
     payload: dict,
     headers: dict,
     db: AsyncSession,
+    client: httpx.AsyncClient,
 ) -> Response:
     start_time = time.time()
     request_id = str(uuid.uuid4())
 
     # Filter headers (keep Authorization, omit Host, Content-Length)
     proxy_headers = {
-        k: v for k,
-        v in headers.items() if k.lower() not in (
-            "host",
-            "content-length",
-            "connection",
-            "accept-encoding")}
+        k: v
+        for k, v in headers.items()
+        if k.lower()
+        not in ("host", "content-length", "connection", "accept-encoding")
+    }
 
     model = payload.get("model", "unknown")
     messages = payload.get("messages", [])
@@ -43,24 +43,20 @@ async def forward_and_log(
     error_message = None
 
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                OPENAI_API_URL,
-                json=payload,
-                headers=proxy_headers,
-                timeout=60.0
-            )
-            upstream_status = response.status_code
-            upstream_response_text = response.text
+        response = await client.post(
+            OPENAI_API_URL, json=payload, headers=proxy_headers, timeout=60.0
+        )
+        upstream_status = response.status_code
+        upstream_response_text = response.text
 
-            if response.status_code == 200:
-                resp_json = response.json()
-                usage = resp_json.get("usage", {})
-                prompt_tokens = usage.get("prompt_tokens")
-                completion_tokens = usage.get("completion_tokens")
-                total_tokens = usage.get("total_tokens")
-            else:
-                error_message = f"Upstream error {response.status_code}"
+        if response.status_code == 200:
+            resp_json = response.json()
+            usage = resp_json.get("usage", {})
+            prompt_tokens = usage.get("prompt_tokens")
+            completion_tokens = usage.get("completion_tokens")
+            total_tokens = usage.get("total_tokens")
+        else:
+            error_message = f"Upstream error {response.status_code}"
 
     except Exception as e:
         error_message = str(e)
@@ -71,12 +67,13 @@ async def forward_and_log(
     latency_ms = int((end_time - start_time) * 1000)
 
     estimated_cost = None
-    if not error_message and prompt_tokens is not None and \
-            completion_tokens is not None:
+    if (
+        not error_message
+        and prompt_tokens is not None
+        and completion_tokens is not None
+    ):
         estimated_cost = calculate_cost(
-            model,
-            prompt_tokens,
-            completion_tokens
+            model, prompt_tokens, completion_tokens
         )
 
     # Log to database
@@ -106,5 +103,5 @@ async def forward_and_log(
     return Response(
         content=upstream_response_text,
         status_code=upstream_status,
-        headers={"Content-Type": "application/json"}
+        headers={"Content-Type": "application/json"},
     )
