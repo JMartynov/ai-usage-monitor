@@ -8,11 +8,15 @@ engine = create_async_engine(
     DATABASE_URL,
     echo=False,
     connect_args=(
-        {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+        {"check_same_thread": False}
+        if DATABASE_URL.startswith("sqlite")
+        else {}
     ),
 )
 
-async_session_maker = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+async_session_maker = sessionmaker(
+    engine, class_=AsyncSession, expire_on_commit=False
+)
 
 Base = declarative_base()
 

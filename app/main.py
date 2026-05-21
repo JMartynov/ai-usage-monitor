@@ -42,4 +42,6 @@ async def proxy_chat_completions(
     client = request.app.state.client
 
     # Send to proxy service
-    return await forward_and_log(payload=payload, headers=headers, db=db, client=client)
+    return await forward_and_log(
+        payload=payload, headers=headers, db=db, client=client
+    )

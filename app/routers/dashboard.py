@@ -24,10 +24,14 @@ async def api_stats(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
     total_requests_query = await db.execute(select(func.count(RequestLog.id)))
     total_requests = total_requests_query.scalar_one()
 
-    total_tokens_query = await db.execute(select(func.sum(RequestLog.total_tokens)))
+    total_tokens_query = await db.execute(
+        select(func.sum(RequestLog.total_tokens))
+    )
     total_tokens = total_tokens_query.scalar_one() or 0
 
-    total_cost_query = await db.execute(select(func.sum(RequestLog.estimated_cost)))
+    total_cost_query = await db.execute(
+        select(func.sum(RequestLog.estimated_cost))
+    )
     total_cost = total_cost_query.scalar_one() or 0.0
 
     # 2. Cost Over Time (grouped by day)
@@ -176,7 +180,10 @@ async def api_alerts(db: AsyncSession = Depends(get_db)):
         )
 
         reason = "cost" if alert_type == "cost" else "token usage"
-        message = f"High {reason} detected: {cost_display} / {row.total_tokens} tokens"
+        message = (
+            f"High {reason} detected: {cost_display} / "
+            f"{row.total_tokens} tokens"
+        )
 
         alerts.append(
             {

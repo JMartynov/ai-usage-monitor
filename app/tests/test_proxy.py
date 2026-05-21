@@ -16,7 +16,9 @@ engine = create_async_engine(
     TEST_DATABASE_URL, echo=False, connect_args={"check_same_thread": False}
 )
 
-TestingSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+TestingSessionLocal = sessionmaker(
+    engine, class_=AsyncSession, expire_on_commit=False
+)
 
 
 async def override_get_db():
@@ -45,7 +47,11 @@ async def test_successful_proxy():
     mock_url = "https://api.openai.com/v1/chat/completions"
     mock_response_json = {
         "choices": [{"message": {"content": "Hello"}}],
-        "usage": {"prompt_tokens": 5, "completion_tokens": 7, "total_tokens": 12},
+        "usage": {
+            "prompt_tokens": 5,
+            "completion_tokens": 7,
+            "total_tokens": 12,
+        },
     }
     mock_route = respx.post(mock_url).mock(
         return_value=httpx.Response(200, json=mock_response_json)
@@ -131,9 +137,11 @@ async def test_upstream_error():
         result = await session.execute(select(RequestLog))
         logs = result.scalars().all()
         # Find the log for this specific test
-        log = [log_item for log_item in logs if log_item.error == "Upstream error 400"][
-            0
-        ]
+        log = [
+            log_item
+            for log_item in logs
+            if log_item.error == "Upstream error 400"
+        ][0]
 
         assert log.error == "Upstream error 400"
         assert log.response is None
@@ -164,7 +172,11 @@ async def test_timeout_error():
 
         result = await session.execute(select(RequestLog))
         logs = result.scalars().all()
-        log = [log_item for log_item in logs if "Timeout" in (log_item.error or "")][0]
+        log = [
+            log_item
+            for log_item in logs
+            if "Timeout" in (log_item.error or "")
+        ][0]
 
         assert "Timeout" in log.error
         assert log.response is None
@@ -178,7 +190,9 @@ async def test_missing_usage():
     mock_response_json = {
         "choices": [{"message": {"content": "Hello"}}],
     }
-    respx.post(mock_url).mock(return_value=httpx.Response(200, json=mock_response_json))
+    respx.post(mock_url).mock(
+        return_value=httpx.Response(200, json=mock_response_json)
+    )
 
     async with LifespanManager(main_app):
         transport = httpx.ASGITransport(app=main_app)
@@ -220,7 +234,11 @@ async def test_header_filtering():
     mock_url = "https://api.openai.com/v1/chat/completions"
     mock_response_json = {
         "choices": [{"message": {"content": "Hello"}}],
-        "usage": {"prompt_tokens": 5, "completion_tokens": 7, "total_tokens": 12},
+        "usage": {
+            "prompt_tokens": 5,
+            "completion_tokens": 7,
+            "total_tokens": 12,
+        },
     }
     mock_route = respx.post(mock_url).mock(
         return_value=httpx.Response(200, json=mock_response_json)

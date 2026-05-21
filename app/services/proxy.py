@@ -27,7 +27,8 @@ async def forward_and_log(
     proxy_headers = {
         k: v
         for k, v in headers.items()
-        if k.lower() not in ("host", "content-length", "connection", "accept-encoding")
+        if k.lower()
+        not in ("host", "content-length", "connection", "accept-encoding")
     }
 
     model = payload.get("model", "unknown")
@@ -71,7 +72,9 @@ async def forward_and_log(
         and prompt_tokens is not None
         and completion_tokens is not None
     ):
-        estimated_cost = calculate_cost(model, prompt_tokens, completion_tokens)
+        estimated_cost = calculate_cost(
+            model, prompt_tokens, completion_tokens
+        )
 
     # Log to database
     log_entry = RequestLog(

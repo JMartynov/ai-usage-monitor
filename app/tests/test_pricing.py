@@ -8,7 +8,8 @@ def test_known_model_pricing_correct():
     completion_tokens = 1000
 
     expected_cost = (
-        MODEL_PRICING[model]["input_per_1k"] + MODEL_PRICING[model]["output_per_1k"]
+        MODEL_PRICING[model]["input_per_1k"]
+        + MODEL_PRICING[model]["output_per_1k"]
     )
     cost = calculate_cost(model, prompt_tokens, completion_tokens)
 
@@ -20,7 +21,9 @@ def test_unknown_model_uses_default():
     prompt_tokens = 1000
     completion_tokens = 1000
 
-    expected_cost = DEFAULT_PRICING["input_per_1k"] + DEFAULT_PRICING["output_per_1k"]
+    expected_cost = (
+        DEFAULT_PRICING["input_per_1k"] + DEFAULT_PRICING["output_per_1k"]
+    )
     cost = calculate_cost(model, prompt_tokens, completion_tokens)
 
     assert cost == expected_cost

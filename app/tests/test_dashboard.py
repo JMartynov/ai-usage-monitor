@@ -16,7 +16,9 @@ engine = create_async_engine(
     TEST_DATABASE_URL, echo=False, connect_args={"check_same_thread": False}
 )
 
-TestingSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+TestingSessionLocal = sessionmaker(
+    engine, class_=AsyncSession, expire_on_commit=False
+)
 
 
 async def override_get_db():
