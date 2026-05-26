@@ -12,9 +12,7 @@ from app.models import RequestLog
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
 engine = create_async_engine(
-    TEST_DATABASE_URL,
-    echo=False,
-    connect_args={"check_same_thread": False}
+    TEST_DATABASE_URL, echo=False, connect_args={"check_same_thread": False}
 )
 
 TestingSessionLocal = sessionmaker(
@@ -25,6 +23,7 @@ TestingSessionLocal = sessionmaker(
 async def override_get_db():
     async with TestingSessionLocal() as session:
         yield session
+
 
 main_app.dependency_overrides[get_db] = override_get_db
 
@@ -50,12 +49,12 @@ async def test_successful_proxy():
         "usage": {
             "prompt_tokens": 5,
             "completion_tokens": 7,
-            "total_tokens": 12
-        }
+            "total_tokens": 12,
+        },
     }
     mock_route = respx.post(mock_url).mock(
-        return_value=httpx.Response(
-            200, json=mock_response_json))
+        return_value=httpx.Response(200, json=mock_response_json)
+    )
 
     # 2. Send request to proxy
     transport = httpx.ASGITransport(app=main_app)
@@ -63,14 +62,13 @@ async def test_successful_proxy():
     payload = {
         "model": "gpt-3.5-turbo",
         "messages": [{"role": "user", "content": "Hi"}],
-        "temperature": 0.7
+        "temperature": 0.7,
     }
-    headers = {
-        "Authorization": "Bearer test-key"
-    }
+    headers = {"Authorization": "Bearer test-key"}
 
     response = await client.post(
-        "/v1/chat/completions", json=payload, headers=headers)
+        "/v1/chat/completions", json=payload, headers=headers
+    )
 
     # Verify response passthrough
     assert response.status_code == 200
@@ -81,14 +79,19 @@ async def test_successful_proxy():
     upstream_request = mock_route.calls.last.request
     assert upstream_request.url == mock_url
     assert upstream_request.headers.get("Authorization") == "Bearer test-key"
-    assert "temperature" in httpx.Request(
-        upstream_request.method,
-        upstream_request.url,
-        content=upstream_request.content).content.decode()
+    assert (
+        "temperature"
+        in httpx.Request(
+            upstream_request.method,
+            upstream_request.url,
+            content=upstream_request.content,
+        ).content.decode()
+    )
 
     # 4. Verify database
     async with TestingSessionLocal() as session:
         from sqlalchemy import select
+
         result = await session.execute(select(RequestLog))
         logs = result.scalars().all()
 
@@ -109,9 +112,8 @@ async def test_successful_proxy():
 async def test_upstream_error():
     mock_url = "https://api.openai.com/v1/chat/completions"
     respx.post(mock_url).mock(
-        return_value=httpx.Response(
-            400, json={
-                "error": "bad request"}))
+        return_value=httpx.Response(400, json={"error": "bad request"})
+    )
 
     transport = httpx.ASGITransport(app=main_app)
     client = httpx.AsyncClient(transport=transport, base_url="http://test")
@@ -124,11 +126,15 @@ async def test_upstream_error():
 
     async with TestingSessionLocal() as session:
         from sqlalchemy import select
+
         result = await session.execute(select(RequestLog))
         logs = result.scalars().all()
         # Find the log for this specific test
-        log = [log_item for log_item in logs
-               if log_item.error == "Upstream error 400"][0]
+        log = [
+            log_item
+            for log_item in logs
+            if log_item.error == "Upstream error 400"
+        ][0]
 
         assert log.error == "Upstream error 400"
         assert log.response is None
@@ -153,10 +159,14 @@ async def test_timeout_error():
 
     async with TestingSessionLocal() as session:
         from sqlalchemy import select
+
         result = await session.execute(select(RequestLog))
         logs = result.scalars().all()
-        log = [log_item for log_item in logs
-               if "Timeout" in (log_item.error or "")][0]
+        log = [
+            log_item
+            for log_item in logs
+            if "Timeout" in (log_item.error or "")
+        ][0]
 
         assert "Timeout" in log.error
         assert log.response is None
@@ -171,13 +181,15 @@ async def test_missing_usage():
         "choices": [{"message": {"content": "Hello"}}],
     }
     respx.post(mock_url).mock(
-        return_value=httpx.Response(
-            200, json=mock_response_json))
+        return_value=httpx.Response(200, json=mock_response_json)
+    )
 
     transport = httpx.ASGITransport(app=main_app)
     client = httpx.AsyncClient(transport=transport, base_url="http://test")
-    payload = {"model": "gpt-3.5-turbo",
-               "messages": [{"role": "user", "content": "Hi"}]}
+    payload = {
+        "model": "gpt-3.5-turbo",
+        "messages": [{"role": "user", "content": "Hi"}],
+    }
 
     response = await client.post("/v1/chat/completions", json=payload)
 
@@ -186,11 +198,15 @@ async def test_missing_usage():
 
     async with TestingSessionLocal() as session:
         from sqlalchemy import select
+
         result = await session.execute(select(RequestLog))
         logs = result.scalars().all()
         # Find the log with no usage and no error
-        log = [log_item for log_item in logs
-               if log_item.prompt_tokens is None and log_item.error is None][0]
+        log = [
+            log_item
+            for log_item in logs
+            if log_item.prompt_tokens is None and log_item.error is None
+        ][0]
 
         assert log.error is None
         assert log.response is not None
@@ -208,26 +224,29 @@ async def test_header_filtering():
         "usage": {
             "prompt_tokens": 5,
             "completion_tokens": 7,
-            "total_tokens": 12
-        }
+            "total_tokens": 12,
+        },
     }
     mock_route = respx.post(mock_url).mock(
-        return_value=httpx.Response(
-            200, json=mock_response_json))
+        return_value=httpx.Response(200, json=mock_response_json)
+    )
 
     transport = httpx.ASGITransport(app=main_app)
     client = httpx.AsyncClient(transport=transport, base_url="http://test")
-    payload = {"model": "gpt-3.5-turbo",
-               "messages": [{"role": "user", "content": "Hi"}]}
+    payload = {
+        "model": "gpt-3.5-turbo",
+        "messages": [{"role": "user", "content": "Hi"}],
+    }
     headers = {
         "Authorization": "Bearer test-key",
         "Host": "localhost:8000",
         "Content-Length": "100",
-        "X-Custom": "Value"
+        "X-Custom": "Value",
     }
 
     response = await client.post(
-        "/v1/chat/completions", json=payload, headers=headers)
+        "/v1/chat/completions", json=payload, headers=headers
+    )
     assert response.status_code == 200
 
     assert mock_route.called
@@ -241,3 +260,33 @@ async def test_header_filtering():
     # The proxy removes "host", "content-length",
     # "connection", "accept-encoding".
     # X-Custom should be forwarded.
+
+
+@pytest.mark.asyncio
+async def test_invalid_payload_validation():
+    # Test that an invalid payload missing 'model' or 'messages' is rejected
+    transport = httpx.ASGITransport(app=main_app)
+    client = httpx.AsyncClient(transport=transport, base_url="http://test")
+
+    # Missing 'messages'
+    payload1 = {"model": "gpt-3.5-turbo"}
+    response1 = await client.post("/v1/chat/completions", json=payload1)
+    assert response1.status_code == 422
+
+    # Missing 'model'
+    payload2 = {"messages": [{"role": "user", "content": "Hi"}]}
+    response2 = await client.post("/v1/chat/completions", json=payload2)
+    assert response2.status_code == 422
+
+    # Valid payload works
+    payload3 = {
+        "model": "gpt-3.5-turbo",
+        "messages": [{"role": "user", "content": "Hi"}],
+    }
+    with respx.mock:
+        mock_url = "https://api.openai.com/v1/chat/completions"
+        respx.post(mock_url).mock(
+            return_value=httpx.Response(200, json={"choices": []})
+        )
+        response3 = await client.post("/v1/chat/completions", json=payload3)
+        assert response3.status_code == 200
