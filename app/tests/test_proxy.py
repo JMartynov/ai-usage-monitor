@@ -2,6 +2,7 @@ import pytest
 import httpx
 import respx
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
 
 from app.main import app as main_app
@@ -27,6 +28,12 @@ async def override_get_db():
         yield session
 
 main_app.dependency_overrides[get_db] = override_get_db
+
+
+async def get_test_logs():
+    async with TestingSessionLocal() as session:
+        result = await session.execute(select(RequestLog))
+        return result.scalars().all()
 
 
 @pytest.fixture(autouse=True)
@@ -87,21 +94,18 @@ async def test_successful_proxy():
         content=upstream_request.content).content.decode()
 
     # 4. Verify database
-    async with TestingSessionLocal() as session:
-        from sqlalchemy import select
-        result = await session.execute(select(RequestLog))
-        logs = result.scalars().all()
+    logs = await get_test_logs()
 
-        assert len(logs) == 1
-        log = logs[0]
-        assert log.model == "gpt-3.5-turbo"
-        assert log.prompt_tokens == 5
-        assert log.completion_tokens == 7
-        assert log.total_tokens == 12
-        assert "Hi" in log.prompt
-        assert log.latency_ms is not None
-        assert log.response is not None
-        assert log.error is None
+    assert len(logs) == 1
+    log = logs[0]
+    assert log.model == "gpt-3.5-turbo"
+    assert log.prompt_tokens == 5
+    assert log.completion_tokens == 7
+    assert log.total_tokens == 12
+    assert "Hi" in log.prompt
+    assert log.latency_ms is not None
+    assert log.response is not None
+    assert log.error is None
 
 
 @pytest.mark.asyncio
@@ -122,17 +126,14 @@ async def test_upstream_error():
     assert response.status_code == 400
     assert response.json() == {"error": "bad request"}
 
-    async with TestingSessionLocal() as session:
-        from sqlalchemy import select
-        result = await session.execute(select(RequestLog))
-        logs = result.scalars().all()
-        # Find the log for this specific test
-        log = [log_item for log_item in logs
-               if log_item.error == "Upstream error 400"][0]
+    logs = await get_test_logs()
+    # Find the log for this specific test
+    log = [log_item for log_item in logs
+           if log_item.error == "Upstream error 400"][0]
 
-        assert log.error == "Upstream error 400"
-        assert log.response is None
-        assert log.prompt_tokens is None
+    assert log.error == "Upstream error 400"
+    assert log.response is None
+    assert log.prompt_tokens is None
 
 
 @pytest.mark.asyncio
@@ -151,16 +152,13 @@ async def test_timeout_error():
     assert "error" in response.json()
     assert "Timeout" in response.json()["error"]
 
-    async with TestingSessionLocal() as session:
-        from sqlalchemy import select
-        result = await session.execute(select(RequestLog))
-        logs = result.scalars().all()
-        log = [log_item for log_item in logs
-               if "Timeout" in (log_item.error or "")][0]
+    logs = await get_test_logs()
+    log = [log_item for log_item in logs
+           if "Timeout" in (log_item.error or "")][0]
 
-        assert "Timeout" in log.error
-        assert log.response is None
-        assert log.prompt_tokens is None
+    assert "Timeout" in log.error
+    assert log.response is None
+    assert log.prompt_tokens is None
 
 
 @pytest.mark.asyncio
@@ -184,19 +182,16 @@ async def test_missing_usage():
     assert response.status_code == 200
     assert response.json() == mock_response_json
 
-    async with TestingSessionLocal() as session:
-        from sqlalchemy import select
-        result = await session.execute(select(RequestLog))
-        logs = result.scalars().all()
-        # Find the log with no usage and no error
-        log = [log_item for log_item in logs
-               if log_item.prompt_tokens is None and log_item.error is None][0]
+    logs = await get_test_logs()
+    # Find the log with no usage and no error
+    log = [log_item for log_item in logs
+           if log_item.prompt_tokens is None and log_item.error is None][0]
 
-        assert log.error is None
-        assert log.response is not None
-        assert log.prompt_tokens is None
-        assert log.completion_tokens is None
-        assert log.total_tokens is None
+    assert log.error is None
+    assert log.response is not None
+    assert log.prompt_tokens is None
+    assert log.completion_tokens is None
+    assert log.total_tokens is None
 
 
 @pytest.mark.asyncio
