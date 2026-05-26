@@ -108,3 +108,64 @@ async def test_dashboard_api_stats():
 
     assert "recent_activity" in data
     assert len(data["recent_activity"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_dashboard_api_alerts(setup_test_db):
+    async with TestingSessionLocal() as session:
+        logs = [
+            RequestLog(
+                model="gpt-4",
+                prompt="expensive prompt",
+                prompt_tokens=10,
+                completion_tokens=20,
+                total_tokens=30,
+                estimated_cost=2.50,  # Cost > 1.00
+                timestamp=datetime.datetime.now(datetime.timezone.utc)
+            ),
+            RequestLog(
+                model="gpt-3.5-turbo",
+                prompt="long prompt",
+                prompt_tokens=50000,
+                completion_tokens=60000,
+                total_tokens=110000,  # Tokens > 100000
+                estimated_cost=0.50,  # Cost < 1.00
+                timestamp=datetime.datetime.now(datetime.timezone.utc)
+            ),
+            RequestLog(
+                model="gpt-4o-mini",
+                prompt="normal prompt",
+                prompt_tokens=100,
+                completion_tokens=200,
+                total_tokens=300,  # Tokens < 100000
+                estimated_cost=0.01,  # Cost < 1.00
+                timestamp=datetime.datetime.now(datetime.timezone.utc)
+            )
+        ]
+        session.add_all(logs)
+        await session.commit()
+
+    main_app.dependency_overrides[get_db] = override_get_db
+    transport = httpx.ASGITransport(app=main_app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/api/alerts")
+        assert response.status_code == 200
+
+        data = response.json()
+        # The 2 existing test db items are safe, and the 1 new negative test should be ignored.
+        # We expect exactly 2 alerts.
+        assert len(data) == 2
+
+        # Check the cost alert
+        cost_alert = next((a for a in data if a["type"] == "cost"), None)
+        assert cost_alert is not None
+        assert cost_alert["cost"] == 2.5
+        assert cost_alert["tokens"] == 30
+        assert "High cost detected" in cost_alert["message"]
+
+        # Check the budget (token) alert
+        token_alert = next((a for a in data if a["type"] == "budget"), None)
+        assert token_alert is not None
+        assert token_alert["cost"] == 0.5
+        assert token_alert["tokens"] == 110000
+        assert "High token usage detected" in token_alert["message"]
