@@ -1,15 +1,41 @@
-from fastapi import APIRouter, Depends, Request
-
+from fastapi import APIRouter, Depends, Request, HTTPException, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+import secrets
+import os
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc, text
-
 from ..database import get_db
 from ..models import RequestLog
 from typing import Dict, Any
 
-router = APIRouter()
+security = HTTPBasic()
+
+
+def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
+    correct_username = secrets.compare_digest(
+        credentials.username.encode("utf8"),
+        (os.getenv("DASHBOARD_USERNAME") or "").encode("utf8")
+    )
+    correct_password = secrets.compare_digest(
+        credentials.password.encode("utf8"),
+        (os.getenv("DASHBOARD_PASSWORD") or "").encode("utf8")
+    )
+    if (
+        not os.getenv("DASHBOARD_USERNAME")
+        or not os.getenv("DASHBOARD_PASSWORD")
+        or not (correct_username and correct_password)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials
+
+
+router = APIRouter(dependencies=[Depends(verify_credentials)])
 templates = Jinja2Templates(directory="app/templates")
 
 
