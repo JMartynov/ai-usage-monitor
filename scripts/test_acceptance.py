@@ -8,16 +8,18 @@ import sys
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 import uvicorn
-import signal
 
 # --- Mock Upstream Server ---
 mock_app = FastAPI()
+
 
 @mock_app.post("/v1/chat/completions")
 async def mock_completions(request: dict):
     model = request.get("model", "unknown")
     if model == "error-model":
-        return JSONResponse(status_code=500, content={"error": "Internal Server Error"})
+        return JSONResponse(
+            status_code=500, content={"error": "Internal Server Error"}
+        )
 
     # Simple logic to simulate token usage
     prompt = request.get("messages", [{"content": ""}])[0].get("content", "")
@@ -48,15 +50,18 @@ async def mock_completions(request: dict):
         }]
     }
 
+
 def run_mock_server():
     uvicorn.run(mock_app, host="127.0.0.1", port=8001, log_level="error")
 
 # --- Main Acceptance Test ---
+
+
 def wait_for_server(url, timeout=10):
     start_time = time.time()
     while time.time() - start_time < timeout:
         try:
-            response = httpx.get(url)
+            response = httpx.get(url, auth=("admin", "admin"))
             if response.status_code == 200:
                 return True
         except httpx.RequestError:
@@ -64,19 +69,30 @@ def wait_for_server(url, timeout=10):
         time.sleep(0.5)
     return False
 
+
 async def main():
     db_file = "./test_acceptance.db"
     if os.path.exists(db_file):
         os.remove(db_file)
 
     os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{db_file}"
-    os.environ["OPENAI_API_URL"] = "http://127.0.0.1:8001/v1/chat/completions" # Note: we need to allow configuring this in proxy.py
+    os.environ["OPENAI_API_URL"] = "http://127.0.0.1:8001/v1/chat/completions"
+    # Note: we need to allow configuring this in proxy.py
+    os.environ["DASHBOARD_USERNAME"] = "admin"
+    os.environ["DASHBOARD_PASSWORD"] = "admin"
 
     print("Starting mock upstream server...")
-    mock_process = subprocess.Popen([sys.executable, "-c", "from scripts.test_acceptance import run_mock_server; run_mock_server()"])
+    mock_process = subprocess.Popen([
+        sys.executable, "-c",
+        "from scripts.test_acceptance import run_mock_server; "
+        "run_mock_server()"
+    ])
 
     print("Starting main app...")
-    app_process = subprocess.Popen([sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8000", "--log-level", "error"])
+    app_process = subprocess.Popen([
+        sys.executable, "-m", "uvicorn", "app.main:app",
+        "--host", "127.0.0.1", "--port", "8000", "--log-level", "error"
+    ])
 
     try:
         # Wait for both to be up
@@ -85,33 +101,55 @@ async def main():
             sys.exit(1)
 
         print("Servers started. Sending traffic...")
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(
+            auth=("admin", "admin")
+        ) as client:
             # 1. Normal request
-            r = await client.post("http://127.0.0.1:8000/v1/chat/completions", json={
-                "model": "gpt-4o",
-                "messages": [{"role": "user", "content": "Hello, world!"}]
-            })
+            r = await client.post(
+                "http://127.0.0.1:8000/v1/chat/completions",
+                json={
+                    "model": "gpt-4o",
+                    "messages": [
+                        {"role": "user", "content": "Hello, world!"}
+                    ]
+                }
+            )
             assert r.status_code == 200
 
             # 2. Another normal request
-            r = await client.post("http://127.0.0.1:8000/v1/chat/completions", json={
-                "model": "gpt-4o-mini",
-                "messages": [{"role": "user", "content": "How are you?"}]
-            })
+            r = await client.post(
+                "http://127.0.0.1:8000/v1/chat/completions",
+                json={
+                    "model": "gpt-4o-mini",
+                    "messages": [
+                        {"role": "user", "content": "How are you?"}
+                    ]
+                }
+            )
             assert r.status_code == 200
 
             # 3. High cost request
-            r = await client.post("http://127.0.0.1:8000/v1/chat/completions", json={
-                "model": "high-cost-model",
-                "messages": [{"role": "user", "content": "Write a long book"}]
-            })
+            r = await client.post(
+                "http://127.0.0.1:8000/v1/chat/completions",
+                json={
+                    "model": "high-cost-model",
+                    "messages": [
+                        {"role": "user", "content": "Write a long book"}
+                    ]
+                }
+            )
             assert r.status_code == 200
 
             # 4. Error request
-            r = await client.post("http://127.0.0.1:8000/v1/chat/completions", json={
-                "model": "error-model",
-                "messages": [{"role": "user", "content": "Fail me"}]
-            })
+            r = await client.post(
+                "http://127.0.0.1:8000/v1/chat/completions",
+                json={
+                    "model": "error-model",
+                    "messages": [
+                        {"role": "user", "content": "Fail me"}
+                    ]
+                }
+            )
             assert r.status_code == 500
 
             print("Traffic sent. Validating dashboard stats...")
@@ -121,7 +159,8 @@ async def main():
             stats = r.json()
 
             assert stats["total"]["requests"] == 4
-            assert stats["total"]["tokens"] > 500000 # Due to high cost request
+            # Due to high cost request
+            assert stats["total"]["tokens"] > 500000
 
             print("Validating DB state directly...")
             # Query db directly
@@ -134,11 +173,15 @@ async def main():
 
             print("Validating alerts...")
             r = await client.get("http://127.0.0.1:8000/api/alerts")
-            assert r.status_code == 200, f"Alerts endpoint failed with status {r.status_code}"
+            assert r.status_code == 200, \
+                f"Alerts endpoint failed with status {r.status_code}"
             alerts = r.json()
             # Assuming high-cost triggered an alert
             assert len(alerts) > 0, "No alerts found"
-            assert any(a["type"] == "cost" or a["type"] == "budget" for a in alerts), "No cost or budget alert found"
+            assert any(
+                a["type"] in ("cost", "budget")
+                for a in alerts
+            ), "No cost or budget alert found"
 
         print("Acceptance tests passed successfully!")
 
