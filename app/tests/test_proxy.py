@@ -241,3 +241,16 @@ async def test_header_filtering():
     # The proxy removes "host", "content-length",
     # "connection", "accept-encoding".
     # X-Custom should be forwarded.
+
+
+@pytest.mark.asyncio
+async def test_invalid_payload_rejected():
+    transport = httpx.ASGITransport(app=main_app)
+    client = httpx.AsyncClient(transport=transport, base_url="http://test")
+    # Payload missing 'model' and 'messages'
+    payload = {"temperature": 0.7}
+
+    response = await client.post("/v1/chat/completions", json=payload)
+
+    # FastAPI should reject this with a 422 Unprocessable Entity
+    assert response.status_code == 422
