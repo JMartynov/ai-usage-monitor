@@ -98,9 +98,9 @@ async def test_successful_proxy():
         assert log.prompt_tokens == 5
         assert log.completion_tokens == 7
         assert log.total_tokens == 12
-        assert "Hi" in log.prompt
+        assert log.prompt is None
         assert log.latency_ms is not None
-        assert log.response is not None
+        assert log.response is None
         assert log.error is None
 
 
@@ -193,7 +193,7 @@ async def test_missing_usage():
                if log_item.prompt_tokens is None and log_item.error is None][0]
 
         assert log.error is None
-        assert log.response is not None
+        assert log.response is None
         assert log.prompt_tokens is None
         assert log.completion_tokens is None
         assert log.total_tokens is None
