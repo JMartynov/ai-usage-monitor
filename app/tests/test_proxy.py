@@ -262,14 +262,25 @@ async def test_db_commit_failure():
     )
 
     transport = httpx.ASGITransport(app=main_app)
-    payload = {"model": "gpt-3.5-turbo", "messages": [{"role": "user", "content": "Hi"}]}
+    payload = {
+        "model": "gpt-3.5-turbo",
+        "messages": [{"role": "user", "content": "Hi"}]
+    }
 
     # We want to patch the commit method of the AsyncSession
-    with patch("sqlalchemy.ext.asyncio.AsyncSession.commit", side_effect=Exception("DB Error")) as mock_commit, \
-         patch("sqlalchemy.ext.asyncio.AsyncSession.rollback") as mock_rollback:
+    with patch(
+        "sqlalchemy.ext.asyncio.AsyncSession.commit",
+        side_effect=Exception("DB Error")
+    ) as mock_commit, patch(
+        "sqlalchemy.ext.asyncio.AsyncSession.rollback"
+    ) as mock_rollback:
 
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-            response = await client.post("/v1/chat/completions", json=payload)
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/v1/chat/completions", json=payload
+            )
 
         assert response.status_code == 200
         assert mock_commit.called
