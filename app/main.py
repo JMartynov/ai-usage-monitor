@@ -1,5 +1,5 @@
 import contextlib
-from fastapi import FastAPI, Depends, Request
+from fastapi import FastAPI, Depends, Request, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .database import engine, Base, get_db
@@ -23,6 +23,7 @@ app.include_router(dashboard_router)
 async def proxy_chat_completions(
     payload: dict,  # Accept dict directly to avoid dropping fields
     request: Request,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db)
 ):
     # Extract headers
@@ -32,5 +33,6 @@ async def proxy_chat_completions(
     return await forward_and_log(
         payload=payload,
         headers=headers,
+        background_tasks=background_tasks,
         db=db
     )

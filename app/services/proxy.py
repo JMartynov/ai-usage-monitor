@@ -2,6 +2,7 @@ import json
 import time
 import uuid
 import httpx
+from fastapi import BackgroundTasks
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..models import RequestLog
@@ -14,9 +15,19 @@ OPENAI_API_URL = os.environ.get(
 )
 
 
+async def _commit_log(db: AsyncSession, log_entry: RequestLog):
+    db.add(log_entry)
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        # In a real app we'd log this fallback error
+
+
 async def forward_and_log(
     payload: dict,
     headers: dict,
+    background_tasks: BackgroundTasks,
     db: AsyncSession,
 ) -> Response:
     start_time = time.time()
@@ -93,12 +104,7 @@ async def forward_and_log(
         error=error_message,
     )
 
-    db.add(log_entry)
-    try:
-        await db.commit()
-    except Exception:
-        await db.rollback()
-        # In a real app we'd log this fallback error
+    background_tasks.add_task(_commit_log, db, log_entry)
 
     if error_message and upstream_status == 502:
         return JSONResponse(status_code=502, content={"error": error_message})
