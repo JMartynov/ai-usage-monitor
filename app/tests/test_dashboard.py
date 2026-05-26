@@ -147,12 +147,15 @@ async def test_dashboard_api_alerts(setup_test_db):
 
     main_app.dependency_overrides[get_db] = override_get_db
     transport = httpx.ASGITransport(app=main_app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://test"
+    ) as client:
         response = await client.get("/api/alerts")
         assert response.status_code == 200
 
         data = response.json()
-        # The 2 existing test db items are safe, and the 1 new negative test should be ignored.
+        # The 2 existing test db items are safe,
+        # and the 1 new negative test should be ignored.
         # We expect exactly 2 alerts.
         assert len(data) == 2
 
@@ -164,7 +167,9 @@ async def test_dashboard_api_alerts(setup_test_db):
         assert "High cost detected" in cost_alert["message"]
 
         # Check the budget (token) alert
-        token_alert = next((a for a in data if a["type"] == "budget"), None)
+        token_alert = next(
+            (a for a in data if a["type"] == "budget"), None
+        )
         assert token_alert is not None
         assert token_alert["cost"] == 0.5
         assert token_alert["tokens"] == 110000
