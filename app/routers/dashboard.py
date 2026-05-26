@@ -1,5 +1,5 @@
+import asyncio
 from fastapi import APIRouter, Depends, Request
-
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,124 +20,157 @@ async def dashboard(request: Request):
 
 @router.get("/api/stats")
 async def api_stats(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
-    # 1. Total Usage
-    total_requests_query = await db.execute(select(func.count(RequestLog.id)))
-    total_requests = total_requests_query.scalar_one()
+    # We will use the bind/engine from the provided db session to create
+    # fresh connections. This allows concurrency without violating session
+    # thread-safety, AND it respects the test dependency overrides since
+    # db.bind will point to the memory test engine!
 
-    total_tokens_query = await db.execute(
-        select(func.sum(RequestLog.total_tokens)))
-    total_tokens = total_tokens_query.scalar_one() or 0
+    engine = db.bind
 
-    total_cost_query = await db.execute(
-        select(func.sum(RequestLog.estimated_cost)))
-    total_cost = total_cost_query.scalar_one() or 0.0
+    async def get_total_requests():
+        async with engine.connect() as conn:
+            query = await conn.execute(select(func.count(RequestLog.id)))
+            return query.scalar_one()
 
-    # 2. Cost Over Time (grouped by day)
-    # Using raw SQL for sqlite compatibility
-    cost_over_time_query = await db.execute(
-        select(
-            func.date(RequestLog.timestamp).label("date"),
-            func.sum(RequestLog.estimated_cost).label("daily_cost")
-        ).group_by(text("date")).order_by(text("date"))
+    async def get_total_tokens():
+        async with engine.connect() as conn:
+            q = select(func.sum(RequestLog.total_tokens))
+            query = await conn.execute(q)
+            return query.scalar_one() or 0
+
+    async def get_total_cost():
+        async with engine.connect() as conn:
+            q = select(func.sum(RequestLog.estimated_cost))
+            query = await conn.execute(q)
+            return query.scalar_one() or 0.0
+
+    async def get_cost_over_time():
+        async with engine.connect() as conn:
+            query = await conn.execute(
+                select(
+                    func.date(RequestLog.timestamp).label("date"),
+                    func.sum(RequestLog.estimated_cost).label("daily_cost")
+                ).group_by(text("date")).order_by(text("date"))
+            )
+            return [
+                {"date": str(row.date), "cost": float(row.daily_cost or 0)}
+                for row in query
+            ]
+
+    async def get_model_distribution():
+        async with engine.connect() as conn:
+            query = await conn.execute(
+                select(
+                    RequestLog.model,
+                    func.count(RequestLog.id).label("request_count"),
+                    func.sum(RequestLog.total_tokens).label("tokens"),
+                    func.sum(RequestLog.estimated_cost).label("cost")
+                ).group_by(RequestLog.model)
+            )
+            return [
+                {
+                    "model": row.model,
+                    "requests": row.request_count,
+                    "tokens": int(row.tokens or 0),
+                    "cost": float(row.cost or 0)
+                }
+                for row in query
+            ]
+
+    async def get_token_breakdown():
+        async with engine.connect() as conn:
+            query = await conn.execute(
+                select(
+                    func.sum(RequestLog.prompt_tokens).label("input_tokens"),
+                    func.sum(RequestLog.completion_tokens).label(
+                        "output_tokens"
+                    )
+                )
+            )
+            result = query.first()
+            return {
+                "input": int(result.input_tokens or 0) if result else 0,
+                "output": int(result.output_tokens or 0) if result else 0
+            }
+
+    async def get_recent_activity():
+        async with engine.connect() as conn:
+            query = await conn.execute(
+                select(
+                    RequestLog.id,
+                    RequestLog.model,
+                    RequestLog.prompt,
+                    RequestLog.estimated_cost,
+                    RequestLog.timestamp
+                ).order_by(desc(RequestLog.timestamp)).limit(20)
+            )
+            return [
+                {
+                    "id": row.id,
+                    "model": row.model,
+                    "prompt": (
+                        (row.prompt[:97] + "...")
+                        if row.prompt and len(row.prompt) > 100
+                        else row.prompt
+                    ),
+                    "cost": float(row.estimated_cost or 0),
+                    "timestamp": (
+                        row.timestamp.isoformat()
+                        if hasattr(row.timestamp, 'isoformat')
+                        else str(row.timestamp)
+                    )
+                }
+                for row in query
+            ]
+
+    async def get_expensive_requests():
+        async with engine.connect() as conn:
+            query = await conn.execute(
+                select(
+                    RequestLog.id,
+                    RequestLog.model,
+                    RequestLog.estimated_cost,
+                    RequestLog.total_tokens,
+                    RequestLog.timestamp
+                ).order_by(desc(RequestLog.estimated_cost)).limit(10)
+            )
+            return [
+                {
+                    "id": row.id,
+                    "model": row.model,
+                    "cost": float(row.estimated_cost or 0),
+                    "tokens": int(row.total_tokens or 0),
+                    "timestamp": (
+                        row.timestamp.isoformat()
+                        if hasattr(row.timestamp, 'isoformat')
+                        else str(row.timestamp)
+                    )
+                }
+                for row in query
+            ]
+
+    results = await asyncio.gather(
+        get_total_requests(),
+        get_total_tokens(),
+        get_total_cost(),
+        get_cost_over_time(),
+        get_model_distribution(),
+        get_token_breakdown(),
+        get_recent_activity(),
+        get_expensive_requests()
     )
-    cost_over_time = [
-        {"date": str(row.date), "cost": float(row.daily_cost or 0)}
-        for row in cost_over_time_query
-    ]
-
-    # 3. Model Distribution
-    model_dist_query = await db.execute(
-        select(
-            RequestLog.model,
-            func.count(RequestLog.id).label("request_count"),
-            func.sum(RequestLog.total_tokens).label("tokens"),
-            func.sum(RequestLog.estimated_cost).label("cost")
-        ).group_by(RequestLog.model)
-    )
-    model_distribution = [
-        {
-            "model": row.model,
-            "requests": row.request_count,
-            "tokens": int(row.tokens or 0),
-            "cost": float(row.cost or 0)
-        }
-        for row in model_dist_query
-    ]
-
-    # 4. Token Breakdown
-    token_breakdown_query = await db.execute(
-        select(
-            func.sum(RequestLog.prompt_tokens).label("input_tokens"),
-            func.sum(RequestLog.completion_tokens).label("output_tokens")
-        )
-    )
-    token_breakdown_result = token_breakdown_query.first()
-    token_breakdown = {
-        "input": int(
-            token_breakdown_result.input_tokens or 0
-        ) if token_breakdown_result else 0,
-        "output": int(
-            token_breakdown_result.output_tokens or 0
-        ) if token_breakdown_result else 0
-    }
-
-    # 5. Recent Activity Feed (last 20)
-    recent_activity_query = await db.execute(
-        select(
-            RequestLog.id,
-            RequestLog.model,
-            RequestLog.prompt,
-            RequestLog.estimated_cost,
-            RequestLog.timestamp
-        ).order_by(desc(RequestLog.timestamp)).limit(20)
-    )
-    recent_activity = [
-        {
-            "id": row.id,
-            "model": row.model,
-            "prompt": (
-                (row.prompt[:97] + "...")
-                if row.prompt and len(row.prompt) > 100
-                else row.prompt
-            ),
-            "cost": float(row.estimated_cost or 0),
-            "timestamp": row.timestamp.isoformat()
-        }
-        for row in recent_activity_query
-    ]
-
-    # 6. Top Expensive Requests
-    expensive_requests_query = await db.execute(
-        select(
-            RequestLog.id,
-            RequestLog.model,
-            RequestLog.estimated_cost,
-            RequestLog.total_tokens,
-            RequestLog.timestamp
-        ).order_by(desc(RequestLog.estimated_cost)).limit(10)
-    )
-    expensive_requests = [
-        {
-            "id": row.id,
-            "model": row.model,
-            "cost": float(row.estimated_cost or 0),
-            "tokens": int(row.total_tokens or 0),
-            "timestamp": row.timestamp.isoformat()
-        }
-        for row in expensive_requests_query
-    ]
 
     return {
         "total": {
-            "requests": total_requests,
-            "tokens": int(total_tokens),
-            "cost": float(total_cost)
+            "requests": results[0],
+            "tokens": int(results[1]),
+            "cost": float(results[2])
         },
-        "cost_over_time": cost_over_time,
-        "model_distribution": model_distribution,
-        "token_breakdown": token_breakdown,
-        "recent_activity": recent_activity,
-        "expensive_requests": expensive_requests
+        "cost_over_time": results[3],
+        "model_distribution": results[4],
+        "token_breakdown": results[5],
+        "recent_activity": results[6],
+        "expensive_requests": results[7]
     }
 
 
