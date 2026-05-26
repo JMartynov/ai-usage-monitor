@@ -1,4 +1,3 @@
-import os
 import pytest
 import httpx
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
@@ -77,7 +76,9 @@ async def test_dashboard_ui(monkeypatch):
     monkeypatch.setenv('DASHBOARD_PASSWORD', 'admin')
     main_app.dependency_overrides[get_db] = override_get_db
     transport = httpx.ASGITransport(app=main_app)
-    client = httpx.AsyncClient(transport=transport, base_url="http://test", auth=("admin", "admin"))
+    client = httpx.AsyncClient(
+        transport=transport, base_url="http://test", auth=("admin", "admin")
+    )
 
     response = await client.get("/dashboard")
     assert response.status_code == 200
@@ -90,7 +91,9 @@ async def test_dashboard_api_stats(monkeypatch):
     monkeypatch.setenv('DASHBOARD_PASSWORD', 'admin')
     main_app.dependency_overrides[get_db] = override_get_db
     transport = httpx.ASGITransport(app=main_app)
-    client = httpx.AsyncClient(transport=transport, base_url="http://test", auth=("admin", "admin"))
+    client = httpx.AsyncClient(
+        transport=transport, base_url="http://test", auth=("admin", "admin")
+    )
 
     response = await client.get("/api/stats")
     assert response.status_code == 200
@@ -114,6 +117,7 @@ async def test_dashboard_api_stats(monkeypatch):
     assert "recent_activity" in data
     assert len(data["recent_activity"]) == 2
 
+
 @pytest.mark.asyncio
 async def test_dashboard_ui_unauthorized(monkeypatch):
     monkeypatch.setenv('DASHBOARD_USERNAME', 'admin')
@@ -124,6 +128,7 @@ async def test_dashboard_ui_unauthorized(monkeypatch):
 
     response = await client.get("/dashboard")
     assert response.status_code == 401
+
 
 @pytest.mark.asyncio
 async def test_dashboard_api_stats_unauthorized(monkeypatch):
