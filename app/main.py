@@ -1,4 +1,5 @@
 import contextlib
+import httpx
 from fastapi import FastAPI, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,7 +13,10 @@ async def lifespan(app: FastAPI):
     # Initialize DB schema
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    app.state.http_client = httpx.AsyncClient()
     yield
+    await app.state.http_client.aclose()
 
 app = FastAPI(lifespan=lifespan)
 
@@ -32,5 +36,6 @@ async def proxy_chat_completions(
     return await forward_and_log(
         payload=payload,
         headers=headers,
-        db=db
+        db=db,
+        client=request.app.state.http_client
     )
