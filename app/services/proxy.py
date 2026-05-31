@@ -14,6 +14,54 @@ OPENAI_API_URL = os.environ.get(
 )
 
 
+def _filter_headers(headers: dict) -> dict:
+    """Filter headers for proxying."""
+    return {
+        k: v for k, v in headers.items()
+        if k.lower() not in (
+            "host",
+            "content-length",
+            "connection",
+            "accept-encoding"
+        )
+    }
+
+
+async def _log_request(
+    db: AsyncSession,
+    request_id: str,
+    model: str,
+    prompt_text: str,
+    upstream_response_text: str | None,
+    prompt_tokens: int | None,
+    completion_tokens: int | None,
+    total_tokens: int | None,
+    estimated_cost: float | None,
+    latency_ms: int,
+    error_message: str | None,
+) -> None:
+    """Log the request to the database."""
+    log_entry = RequestLog(
+        request_id=request_id,
+        model=model,
+        prompt=prompt_text,
+        response=upstream_response_text if not error_message else None,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        total_tokens=total_tokens,
+        estimated_cost=estimated_cost,
+        latency_ms=latency_ms,
+        error=error_message,
+    )
+
+    db.add(log_entry)
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        # In a real app we'd log this fallback error
+
+
 async def forward_and_log(
     payload: dict,
     headers: dict,
@@ -22,14 +70,7 @@ async def forward_and_log(
     start_time = time.time()
     request_id = str(uuid.uuid4())
 
-    # Filter headers (keep Authorization, omit Host, Content-Length)
-    proxy_headers = {
-        k: v for k,
-        v in headers.items() if k.lower() not in (
-            "host",
-            "content-length",
-            "connection",
-            "accept-encoding")}
+    proxy_headers = _filter_headers(headers)
 
     model = payload.get("model", "unknown")
     messages = payload.get("messages", [])
@@ -79,26 +120,19 @@ async def forward_and_log(
             completion_tokens
         )
 
-    # Log to database
-    log_entry = RequestLog(
+    await _log_request(
+        db=db,
         request_id=request_id,
         model=model,
-        prompt=prompt_text,
-        response=upstream_response_text if not error_message else None,
+        prompt_text=prompt_text,
+        upstream_response_text=upstream_response_text,
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
         total_tokens=total_tokens,
         estimated_cost=estimated_cost,
         latency_ms=latency_ms,
-        error=error_message,
+        error_message=error_message,
     )
-
-    db.add(log_entry)
-    try:
-        await db.commit()
-    except Exception:
-        await db.rollback()
-        # In a real app we'd log this fallback error
 
     if error_message and upstream_status == 502:
         return JSONResponse(status_code=502, content={"error": error_message})
