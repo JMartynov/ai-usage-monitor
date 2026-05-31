@@ -108,3 +108,69 @@ async def test_dashboard_api_stats():
 
     assert "recent_activity" in data
     assert len(data["recent_activity"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_dashboard_api_alerts():
+    main_app.dependency_overrides[get_db] = override_get_db
+    transport = httpx.ASGITransport(app=main_app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://test"
+    ) as client:
+
+        # Initial request should have no alerts based on the setup_test_db
+        response = await client.get("/api/alerts")
+        assert response.status_code == 200
+        assert response.json() == []
+
+        # Insert new data that triggers alerts
+        async with TestingSessionLocal() as session:
+            logs = [
+                RequestLog(
+                    model="gpt-4o",
+                    prompt="test prompt expensive",
+                    prompt_tokens=100,
+                    completion_tokens=200,
+                    total_tokens=300,
+                    estimated_cost=1.50,  # > 1.00 triggers cost alert
+                    timestamp=datetime.datetime.now(datetime.timezone.utc)
+                ),
+                RequestLog(
+                    model="gpt-3.5-turbo",
+                    prompt="test prompt massive tokens",
+                    prompt_tokens=50000,
+                    completion_tokens=60000,
+                    total_tokens=110000,  # > 100000 triggers budget alert
+                    estimated_cost=0.50,
+                    timestamp=datetime.datetime.now(datetime.timezone.utc)
+                )
+            ]
+            session.add_all(logs)
+            await session.commit()
+
+        # Second request should have alerts
+        response = await client.get("/api/alerts")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 2
+
+        # Verify the structure and values of the alerts
+        # Order by timestamp desc is applied in the endpoint
+        # So the second log (budget alert) could be first or second,
+        # let's check set
+
+        alert_types = [alert["type"] for alert in data]
+        assert "cost" in alert_types
+        assert "budget" in alert_types
+
+        cost_alert = next(a for a in data if a["type"] == "cost")
+        assert cost_alert["cost"] == 1.50
+        assert cost_alert["tokens"] == 300
+        assert "High cost detected" in cost_alert["message"]
+
+        budget_alert = next(a for a in data if a["type"] == "budget")
+        assert budget_alert["cost"] == 0.50
+        assert budget_alert["tokens"] == 110000
+        assert "High token usage detected" in budget_alert["message"]
+
+    main_app.dependency_overrides.pop(get_db, None)
