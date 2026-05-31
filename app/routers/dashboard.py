@@ -1,5 +1,8 @@
-from fastapi import APIRouter, Depends, Request
 
+import os
+import secrets
+from fastapi import APIRouter, Depends, Request, HTTPException, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,15 +14,50 @@ from typing import Dict, Any
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
+security = HTTPBasic()
+
+
+def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
+    correct_username = os.getenv("DASHBOARD_USERNAME", "")
+    correct_password = os.getenv("DASHBOARD_PASSWORD", "")
+
+    if not correct_username or not correct_password:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Dashboard credentials are not configured"
+        )
+
+    is_correct_username = secrets.compare_digest(
+        credentials.username.encode("utf8"),
+        correct_username.encode("utf8")
+    )
+    is_correct_password = secrets.compare_digest(
+        credentials.password.encode("utf8"),
+        correct_password.encode("utf8")
+    )
+
+    if not (is_correct_username and is_correct_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
-async def dashboard(request: Request):
+async def dashboard(
+    request: Request,
+    username: str = Depends(verify_credentials)
+):
     return templates.TemplateResponse(request=request, name="dashboard.html")
 
 
 @router.get("/api/stats")
-async def api_stats(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
+async def api_stats(
+    db: AsyncSession = Depends(get_db),
+    username: str = Depends(verify_credentials)
+) -> Dict[str, Any]:
     # 1. Total Usage
     total_requests_query = await db.execute(select(func.count(RequestLog.id)))
     total_requests = total_requests_query.scalar_one()
@@ -142,7 +180,10 @@ async def api_stats(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
 
 
 @router.get("/api/alerts")
-async def api_alerts(db: AsyncSession = Depends(get_db)):
+async def api_alerts(
+    db: AsyncSession = Depends(get_db),
+    username: str = Depends(verify_credentials)
+):
     # Simple alert logic: any request costing > $1.00 or > 100000 tokens
     cost_threshold = 1.00
     tokens_threshold = 100000

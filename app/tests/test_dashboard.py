@@ -1,5 +1,6 @@
 import pytest
 import httpx
+from httpx import BasicAuth
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
@@ -71,23 +72,47 @@ async def setup_test_db():
 
 
 @pytest.mark.asyncio
-async def test_dashboard_ui():
+async def test_dashboard_ui(monkeypatch):
+    monkeypatch.setenv("DASHBOARD_USERNAME", "admin")
+    monkeypatch.setenv("DASHBOARD_PASSWORD", "secret")
+
     main_app.dependency_overrides[get_db] = override_get_db
     transport = httpx.ASGITransport(app=main_app)
     client = httpx.AsyncClient(transport=transport, base_url="http://test")
 
-    response = await client.get("/dashboard")
+    # Test missing auth
+    response_no_auth = await client.get("/dashboard")
+    assert response_no_auth.status_code == 401
+
+    # Test wrong auth
+    response_wrong_auth = await client.get(
+        "/dashboard",
+        auth=BasicAuth("admin", "wrong")
+    )
+    assert response_wrong_auth.status_code == 401
+
+    # Test valid auth
+    response = await client.get(
+        "/dashboard",
+        auth=BasicAuth("admin", "secret")
+    )
     assert response.status_code == 200
     assert "AI Usage Dashboard" in response.text
 
 
 @pytest.mark.asyncio
-async def test_dashboard_api_stats():
+async def test_dashboard_api_stats(monkeypatch):
+    monkeypatch.setenv("DASHBOARD_USERNAME", "admin")
+    monkeypatch.setenv("DASHBOARD_PASSWORD", "secret")
+
     main_app.dependency_overrides[get_db] = override_get_db
     transport = httpx.ASGITransport(app=main_app)
     client = httpx.AsyncClient(transport=transport, base_url="http://test")
 
-    response = await client.get("/api/stats")
+    response = await client.get(
+        "/api/stats",
+        auth=BasicAuth("admin", "secret")
+    )
     assert response.status_code == 200
 
     data = response.json()
