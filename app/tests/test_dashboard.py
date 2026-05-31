@@ -108,3 +108,67 @@ async def test_dashboard_api_stats():
 
     assert "recent_activity" in data
     assert len(data["recent_activity"]) == 2
+
+@pytest.mark.asyncio
+async def test_dashboard_api_stats_prompt_truncation():
+    main_app.dependency_overrides[get_db] = override_get_db
+
+    # Add custom records to test prompt truncation
+    async with TestingSessionLocal() as session:
+        logs = [
+            RequestLog(
+                model="gpt-4o",
+                prompt="A" * 105, # > 100 chars
+                prompt_tokens=10,
+                completion_tokens=20,
+                total_tokens=30,
+                estimated_cost=0.001,
+                timestamp=datetime.datetime.now(datetime.timezone.utc)
+            ),
+            RequestLog(
+                model="gpt-4o",
+                prompt="B" * 100, # exactly 100 chars
+                prompt_tokens=10,
+                completion_tokens=20,
+                total_tokens=30,
+                estimated_cost=0.001,
+                timestamp=datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=1)
+            ),
+            RequestLog(
+                model="gpt-4o",
+                prompt=None, # None prompt
+                prompt_tokens=10,
+                completion_tokens=20,
+                total_tokens=30,
+                estimated_cost=0.001,
+                timestamp=datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=2)
+            )
+        ]
+        session.add_all(logs)
+        await session.commit()
+
+    transport = httpx.ASGITransport(app=main_app)
+    client = httpx.AsyncClient(transport=transport, base_url="http://test")
+
+    response = await client.get("/api/stats")
+    assert response.status_code == 200
+
+    data = response.json()
+    recent_activity = data["recent_activity"]
+
+    # Verify the prompts by searching for the unique patterns we inserted
+    long_prompt_entry = next((item for item in recent_activity if item.get("prompt") and item["prompt"].startswith("A" * 97)), None)
+    exact_prompt_entry = next((item for item in recent_activity if item.get("prompt") and item["prompt"] == "B" * 100), None)
+    none_prompt_entry = next((item for item in recent_activity if item.get("prompt") is None), None)
+
+    assert long_prompt_entry is not None
+    assert long_prompt_entry["prompt"] == ("A" * 97) + "..."
+
+    assert exact_prompt_entry is not None
+    assert exact_prompt_entry["prompt"] == "B" * 100
+
+    assert none_prompt_entry is not None
+    assert none_prompt_entry["prompt"] is None
+
+    # Cleanup the dependency override so it doesn't affect subsequent tests
+    main_app.dependency_overrides.pop(get_db, None)
