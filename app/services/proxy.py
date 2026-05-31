@@ -32,8 +32,6 @@ async def forward_and_log(
             "accept-encoding")}
 
     model = payload.get("model", "unknown")
-    messages = payload.get("messages", [])
-    prompt_text = json.dumps(messages)
 
     upstream_status = 500
     upstream_response_text = None
@@ -80,11 +78,12 @@ async def forward_and_log(
         )
 
     # Log to database
+    # Security: Do not store unredacted prompt or response text.
     log_entry = RequestLog(
         request_id=request_id,
         model=model,
-        prompt=prompt_text,
-        response=upstream_response_text if not error_message else None,
+        prompt=None,
+        response=None,
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
         total_tokens=total_tokens,
