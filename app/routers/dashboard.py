@@ -21,16 +21,16 @@ async def dashboard(request: Request):
 @router.get("/api/stats")
 async def api_stats(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
     # 1. Total Usage
-    total_requests_query = await db.execute(select(func.count(RequestLog.id)))
-    total_requests = total_requests_query.scalar_one()
-
-    total_tokens_query = await db.execute(
-        select(func.sum(RequestLog.total_tokens)))
-    total_tokens = total_tokens_query.scalar_one() or 0
-
-    total_cost_query = await db.execute(
-        select(func.sum(RequestLog.estimated_cost)))
-    total_cost = total_cost_query.scalar_one() or 0.0
+    query = await db.execute(
+        select(
+            func.count(RequestLog.id),
+            func.sum(RequestLog.total_tokens),
+            func.sum(RequestLog.estimated_cost)
+        )
+    )
+    total_requests, total_tokens, total_cost = query.one()
+    total_tokens = total_tokens or 0
+    total_cost = total_cost or 0.0
 
     # 2. Cost Over Time (grouped by day)
     # Using raw SQL for sqlite compatibility
