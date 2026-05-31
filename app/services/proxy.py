@@ -64,7 +64,7 @@ async def forward_and_log(
 
     except Exception as e:
         error_message = str(e)
-        upstream_response_text = json.dumps({"error": str(e)})
+        upstream_response_text = json.dumps({"error": "Internal Server Error"})
         upstream_status = 502
 
     end_time = time.time()
@@ -101,7 +101,10 @@ async def forward_and_log(
         # In a real app we'd log this fallback error
 
     if error_message and upstream_status == 502:
-        return JSONResponse(status_code=502, content={"error": error_message})
+        return JSONResponse(
+            status_code=502,
+            content={"error": "Internal Server Error"}
+        )
 
     return Response(
         content=upstream_response_text,
