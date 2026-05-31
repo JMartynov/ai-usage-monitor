@@ -18,6 +18,7 @@ async def forward_and_log(
     payload: dict,
     headers: dict,
     db: AsyncSession,
+    client: httpx.AsyncClient,
 ) -> Response:
     start_time = time.time()
     request_id = str(uuid.uuid4())
@@ -43,24 +44,23 @@ async def forward_and_log(
     error_message = None
 
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                OPENAI_API_URL,
-                json=payload,
-                headers=proxy_headers,
-                timeout=60.0
-            )
-            upstream_status = response.status_code
-            upstream_response_text = response.text
+        response = await client.post(
+            OPENAI_API_URL,
+            json=payload,
+            headers=proxy_headers,
+            timeout=60.0
+        )
+        upstream_status = response.status_code
+        upstream_response_text = response.text
 
-            if response.status_code == 200:
-                resp_json = response.json()
-                usage = resp_json.get("usage", {})
-                prompt_tokens = usage.get("prompt_tokens")
-                completion_tokens = usage.get("completion_tokens")
-                total_tokens = usage.get("total_tokens")
-            else:
-                error_message = f"Upstream error {response.status_code}"
+        if response.status_code == 200:
+            resp_json = response.json()
+            usage = resp_json.get("usage", {})
+            prompt_tokens = usage.get("prompt_tokens")
+            completion_tokens = usage.get("completion_tokens")
+            total_tokens = usage.get("total_tokens")
+        else:
+            error_message = f"Upstream error {response.status_code}"
 
     except Exception as e:
         error_message = str(e)
