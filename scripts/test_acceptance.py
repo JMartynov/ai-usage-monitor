@@ -1,4 +1,3 @@
-import asyncio
 import os
 import sqlite3
 import subprocess
@@ -8,16 +7,21 @@ import sys
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 import uvicorn
-import signal
+import pytest
+import pytest_asyncio
+
 
 # --- Mock Upstream Server ---
 mock_app = FastAPI()
+
 
 @mock_app.post("/v1/chat/completions")
 async def mock_completions(request: dict):
     model = request.get("model", "unknown")
     if model == "error-model":
-        return JSONResponse(status_code=500, content={"error": "Internal Server Error"})
+        return JSONResponse(
+            status_code=500, content={"error": "Internal Server Error"}
+        )
 
     # Simple logic to simulate token usage
     prompt = request.get("messages", [{"content": ""}])[0].get("content", "")
@@ -48,10 +52,11 @@ async def mock_completions(request: dict):
         }]
     }
 
+
 def run_mock_server():
     uvicorn.run(mock_app, host="127.0.0.1", port=8001, log_level="error")
 
-# --- Main Acceptance Test ---
+
 def wait_for_server(url, timeout=10):
     start_time = time.time()
     while time.time() - start_time < timeout:
@@ -64,92 +69,141 @@ def wait_for_server(url, timeout=10):
         time.sleep(0.5)
     return False
 
-async def main():
-    db_file = "./test_acceptance.db"
-    if os.path.exists(db_file):
-        os.remove(db_file)
 
-    os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{db_file}"
-    os.environ["OPENAI_API_URL"] = "http://127.0.0.1:8001/v1/chat/completions" # Note: we need to allow configuring this in proxy.py
+# --- Pytest Fixtures ---
+DB_FILE = "./test_acceptance.db"
 
-    print("Starting mock upstream server...")
-    mock_process = subprocess.Popen([sys.executable, "-c", "from scripts.test_acceptance import run_mock_server; run_mock_server()"])
 
-    print("Starting main app...")
-    app_process = subprocess.Popen([sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8000", "--log-level", "error"])
+@pytest.fixture(scope="module")
+def setup_test_environment():
+    if os.path.exists(DB_FILE):
+        os.remove(DB_FILE)
 
-    try:
-        # Wait for both to be up
-        if not wait_for_server("http://127.0.0.1:8000/dashboard"):
-            print("Main app failed to start.")
-            sys.exit(1)
+    os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{DB_FILE}"
+    os.environ["OPENAI_API_URL"] = "http://127.0.0.1:8001/v1/chat/completions"
 
-        print("Servers started. Sending traffic...")
-        async with httpx.AsyncClient() as client:
-            # 1. Normal request
-            r = await client.post("http://127.0.0.1:8000/v1/chat/completions", json={
-                "model": "gpt-4o",
-                "messages": [{"role": "user", "content": "Hello, world!"}]
-            })
-            assert r.status_code == 200
+    mock_process = subprocess.Popen([
+        sys.executable,
+        "-c",
+        "from scripts.test_acceptance import run_mock_server; "
+        "run_mock_server()"
+    ])
+    app_process = subprocess.Popen([
+        sys.executable,
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8000",
+        "--log-level",
+        "error"
+    ])
 
-            # 2. Another normal request
-            r = await client.post("http://127.0.0.1:8000/v1/chat/completions", json={
-                "model": "gpt-4o-mini",
-                "messages": [{"role": "user", "content": "How are you?"}]
-            })
-            assert r.status_code == 200
-
-            # 3. High cost request
-            r = await client.post("http://127.0.0.1:8000/v1/chat/completions", json={
-                "model": "high-cost-model",
-                "messages": [{"role": "user", "content": "Write a long book"}]
-            })
-            assert r.status_code == 200
-
-            # 4. Error request
-            r = await client.post("http://127.0.0.1:8000/v1/chat/completions", json={
-                "model": "error-model",
-                "messages": [{"role": "user", "content": "Fail me"}]
-            })
-            assert r.status_code == 500
-
-            print("Traffic sent. Validating dashboard stats...")
-            # Validate dashboard
-            r = await client.get("http://127.0.0.1:8000/api/stats")
-            assert r.status_code == 200
-            stats = r.json()
-
-            assert stats["total"]["requests"] == 4
-            assert stats["total"]["tokens"] > 500000 # Due to high cost request
-
-            print("Validating DB state directly...")
-            # Query db directly
-            conn = sqlite3.connect(db_file)
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM requests")
-            count = cursor.fetchone()[0]
-            assert count == 4
-            conn.close()
-
-            print("Validating alerts...")
-            r = await client.get("http://127.0.0.1:8000/api/alerts")
-            assert r.status_code == 200, f"Alerts endpoint failed with status {r.status_code}"
-            alerts = r.json()
-            # Assuming high-cost triggered an alert
-            assert len(alerts) > 0, "No alerts found"
-            assert any(a["type"] == "cost" or a["type"] == "budget" for a in alerts), "No cost or budget alert found"
-
-        print("Acceptance tests passed successfully!")
-
-    finally:
-        print("Tearing down processes...")
+    if not wait_for_server("http://127.0.0.1:8000/dashboard"):
         app_process.terminate()
         mock_process.terminate()
-        app_process.wait()
-        mock_process.wait()
-        if os.path.exists(db_file):
-            os.remove(db_file)
+        raise RuntimeError("Main app failed to start.")
 
-if __name__ == "__main__":
-    asyncio.run(main())
+    yield
+
+    app_process.terminate()
+    mock_process.terminate()
+    app_process.wait()
+    mock_process.wait()
+    if os.path.exists(DB_FILE):
+        os.remove(DB_FILE)
+
+
+@pytest_asyncio.fixture(scope="function")
+async def async_client(setup_test_environment):
+    async with httpx.AsyncClient() as client:
+        yield client
+
+
+# --- Acceptance Tests ---
+
+# We use order markers implicitly by just having them run sequentially
+# since they share the database state.
+# Pytest runs tests in the order they are defined.
+
+@pytest.mark.asyncio
+async def test_normal_request(async_client):
+    r = await async_client.post(
+        "http://127.0.0.1:8000/v1/chat/completions",
+        json={
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": "Hello, world!"}]
+        }
+    )
+    assert r.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_another_normal_request(async_client):
+    r = await async_client.post(
+        "http://127.0.0.1:8000/v1/chat/completions",
+        json={
+            "model": "gpt-4o-mini",
+            "messages": [{"role": "user", "content": "How are you?"}]
+        }
+    )
+    assert r.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_high_cost_request(async_client):
+    r = await async_client.post(
+        "http://127.0.0.1:8000/v1/chat/completions",
+        json={
+            "model": "high-cost-model",
+            "messages": [{"role": "user", "content": "Write a long book"}]
+        }
+    )
+    assert r.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_error_request(async_client):
+    r = await async_client.post(
+        "http://127.0.0.1:8000/v1/chat/completions",
+        json={
+            "model": "error-model",
+            "messages": [{"role": "user", "content": "Fail me"}]
+        }
+    )
+    assert r.status_code == 500
+
+
+@pytest.mark.asyncio
+async def test_dashboard_stats(async_client):
+    r = await async_client.get("http://127.0.0.1:8000/api/stats")
+    assert r.status_code == 200
+    stats = r.json()
+
+    assert stats["total"]["requests"] == 4
+    assert stats["total"]["tokens"] > 500000
+
+
+@pytest.mark.asyncio
+async def test_db_state_directly(setup_test_environment):
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM requests")
+    count = cursor.fetchone()[0]
+    assert count == 4
+    conn.close()
+
+
+@pytest.mark.asyncio
+async def test_alerts_endpoint(async_client):
+    r = await async_client.get("http://127.0.0.1:8000/api/alerts")
+    assert r.status_code == 200, (
+        f"Alerts endpoint failed with status {r.status_code}"
+    )
+    alerts = r.json()
+    assert len(alerts) > 0, "No alerts found"
+    assert any(
+        a["type"] == "cost" or a["type"] == "budget" for a in alerts
+    ), "No cost or budget alert found"
