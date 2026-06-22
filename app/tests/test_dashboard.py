@@ -71,23 +71,27 @@ async def setup_test_db():
 
 
 @pytest.mark.asyncio
-async def test_dashboard_ui():
+async def test_dashboard_ui(monkeypatch):
+    monkeypatch.setenv("DASHBOARD_USERNAME", "admin")
+    monkeypatch.setenv("DASHBOARD_PASSWORD", "secret")
     main_app.dependency_overrides[get_db] = override_get_db
     transport = httpx.ASGITransport(app=main_app)
     client = httpx.AsyncClient(transport=transport, base_url="http://test")
 
-    response = await client.get("/dashboard")
+    response = await client.get("/dashboard", auth=("admin", "secret"))
     assert response.status_code == 200
     assert "AI Usage Dashboard" in response.text
 
 
 @pytest.mark.asyncio
-async def test_dashboard_api_stats():
+async def test_dashboard_api_stats(monkeypatch):
+    monkeypatch.setenv("DASHBOARD_USERNAME", "admin")
+    monkeypatch.setenv("DASHBOARD_PASSWORD", "secret")
     main_app.dependency_overrides[get_db] = override_get_db
     transport = httpx.ASGITransport(app=main_app)
     client = httpx.AsyncClient(transport=transport, base_url="http://test")
 
-    response = await client.get("/api/stats")
+    response = await client.get("/api/stats", auth=("admin", "secret"))
     assert response.status_code == 200
 
     data = response.json()
@@ -108,3 +112,31 @@ async def test_dashboard_api_stats():
 
     assert "recent_activity" in data
     assert len(data["recent_activity"]) == 2
+
+@pytest.mark.asyncio
+async def test_dashboard_unauthorized(monkeypatch):
+    monkeypatch.setenv("DASHBOARD_USERNAME", "admin")
+    monkeypatch.setenv("DASHBOARD_PASSWORD", "secret")
+    main_app.dependency_overrides[get_db] = override_get_db
+    transport = httpx.ASGITransport(app=main_app)
+    client = httpx.AsyncClient(transport=transport, base_url="http://test")
+
+    # Missing credentials
+    response = await client.get("/dashboard")
+    assert response.status_code == 401
+
+    # Invalid credentials
+    response = await client.get("/dashboard", auth=("admin", "wrongpassword"))
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_dashboard_unconfigured(monkeypatch):
+    monkeypatch.delenv("DASHBOARD_USERNAME", raising=False)
+    monkeypatch.delenv("DASHBOARD_PASSWORD", raising=False)
+    main_app.dependency_overrides[get_db] = override_get_db
+    transport = httpx.ASGITransport(app=main_app)
+    client = httpx.AsyncClient(transport=transport, base_url="http://test")
+
+    response = await client.get("/dashboard", auth=("admin", "secret"))
+    assert response.status_code == 500
