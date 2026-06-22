@@ -241,3 +241,22 @@ async def test_header_filtering():
     # The proxy removes "host", "content-length",
     # "connection", "accept-encoding".
     # X-Custom should be forwarded.
+
+
+@pytest.mark.asyncio
+async def test_validation_error():
+    transport = httpx.ASGITransport(app=main_app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://test"
+    ) as client:
+        # Missing model and messages
+        payload = {"temperature": 0.7}
+        response = await client.post("/v1/chat/completions", json=payload)
+
+        assert response.status_code == 422
+        data = response.json()
+        assert "detail" in data
+
+        errors = {err["loc"][-1] for err in data["detail"]}
+        assert "model" in errors
+        assert "messages" in errors
