@@ -71,6 +71,8 @@ async def main():
 
     os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{db_file}"
     os.environ["OPENAI_API_URL"] = "http://127.0.0.1:8001/v1/chat/completions" # Note: we need to allow configuring this in proxy.py
+    os.environ["DASHBOARD_USERNAME"] = "admin"
+    os.environ["DASHBOARD_PASSWORD"] = "secret"
 
     print("Starting mock upstream server...")
     mock_process = subprocess.Popen([sys.executable, "-c", "from scripts.test_acceptance import run_mock_server; run_mock_server()"])
@@ -80,7 +82,8 @@ async def main():
 
     try:
         # Wait for both to be up
-        if not wait_for_server("http://127.0.0.1:8000/dashboard"):
+        # We need to wait for a public endpoint or use auth
+        if not wait_for_server("http://127.0.0.1:8000/docs"):
             print("Main app failed to start.")
             sys.exit(1)
 
@@ -116,7 +119,7 @@ async def main():
 
             print("Traffic sent. Validating dashboard stats...")
             # Validate dashboard
-            r = await client.get("http://127.0.0.1:8000/api/stats")
+            r = await client.get("http://127.0.0.1:8000/api/stats", auth=("admin", "secret"))
             assert r.status_code == 200
             stats = r.json()
 
@@ -133,7 +136,7 @@ async def main():
             conn.close()
 
             print("Validating alerts...")
-            r = await client.get("http://127.0.0.1:8000/api/alerts")
+            r = await client.get("http://127.0.0.1:8000/api/alerts", auth=("admin", "secret"))
             assert r.status_code == 200, f"Alerts endpoint failed with status {r.status_code}"
             alerts = r.json()
             # Assuming high-cost triggered an alert

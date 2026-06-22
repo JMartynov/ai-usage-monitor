@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends, Request
+import os
+import secrets
+from fastapi import APIRouter, Depends, Request, HTTPException, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -9,7 +12,38 @@ from ..database import get_db
 from ..models import RequestLog
 from typing import Dict, Any
 
-router = APIRouter()
+security = HTTPBasic()
+
+
+def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
+    correct_username = os.environ.get("DASHBOARD_USERNAME")
+    correct_password = os.environ.get("DASHBOARD_PASSWORD")
+
+    if not correct_username or not correct_password:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Dashboard authentication is not configured"
+        )
+
+    is_username_correct = secrets.compare_digest(
+        credentials.username.encode("utf8"),
+        correct_username.encode("utf8")
+    )
+    is_password_correct = secrets.compare_digest(
+        credentials.password.encode("utf8"),
+        correct_password.encode("utf8")
+    )
+
+    if not (is_username_correct and is_password_correct):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
+
+
+router = APIRouter(dependencies=[Depends(verify_credentials)])
 templates = Jinja2Templates(directory="app/templates")
 
 
