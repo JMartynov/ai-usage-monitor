@@ -14,6 +14,7 @@ from typing import Dict, Any
 
 security = HTTPBasic()
 
+
 def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
     correct_username = os.environ.get("DASHBOARD_USERNAME")
     correct_password = os.environ.get("DASHBOARD_PASSWORD")
@@ -40,6 +41,7 @@ def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
             headers={"WWW-Authenticate": "Basic"},
         )
     return credentials.username
+
 
 router = APIRouter(dependencies=[Depends(verify_credentials)])
 templates = Jinja2Templates(directory="app/templates")

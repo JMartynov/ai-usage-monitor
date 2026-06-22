@@ -113,6 +113,7 @@ async def test_dashboard_api_stats(monkeypatch):
     assert "recent_activity" in data
     assert len(data["recent_activity"]) == 2
 
+
 @pytest.mark.asyncio
 async def test_dashboard_unauthorized(monkeypatch):
     monkeypatch.setenv("DASHBOARD_USERNAME", "admin")
