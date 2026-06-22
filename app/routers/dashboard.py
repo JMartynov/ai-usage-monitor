@@ -86,7 +86,7 @@ async def api_stats(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
         select(
             RequestLog.id,
             RequestLog.model,
-            RequestLog.prompt,
+            func.substr(RequestLog.prompt, 1, 101).label("prompt"),
             RequestLog.estimated_cost,
             RequestLog.timestamp
         ).order_by(desc(RequestLog.timestamp)).limit(20)
