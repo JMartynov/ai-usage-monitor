@@ -1,6 +1,7 @@
 import pytest
 import httpx
 import respx
+from unittest.mock import patch, AsyncMock
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
@@ -241,3 +242,50 @@ async def test_header_filtering():
     # The proxy removes "host", "content-length",
     # "connection", "accept-encoding".
     # X-Custom should be forwarded.
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_db_commit_error_triggers_rollback():
+    mock_url = "https://api.openai.com/v1/chat/completions"
+    mock_response_json = {
+        "choices": [{"message": {"content": "Hello DB Error"}}],
+        "usage": {
+            "prompt_tokens": 5,
+            "completion_tokens": 7,
+            "total_tokens": 12
+        }
+    }
+    respx.post(mock_url).mock(
+        return_value=httpx.Response(
+            200, json=mock_response_json))
+
+    transport = httpx.ASGITransport(app=main_app)
+    client = httpx.AsyncClient(transport=transport, base_url="http://test")
+    payload = {"model": "gpt-3.5-turbo",
+               "messages": [{"role": "user", "content": "Hi"}]}
+    headers = {
+        "Authorization": "Bearer test-key"
+    }
+
+    with patch(
+        "sqlalchemy.ext.asyncio.AsyncSession.commit",
+        new_callable=AsyncMock
+    ) as mock_commit, patch(
+        "sqlalchemy.ext.asyncio.AsyncSession.rollback",
+        new_callable=AsyncMock
+    ) as mock_rollback:
+
+        # Simulate DB commit failure
+        mock_commit.side_effect = Exception("Simulated DB connection error")
+
+        response = await client.post(
+            "/v1/chat/completions", json=payload, headers=headers)
+
+        # The proxy request should still succeed and return upstream response
+        assert response.status_code == 200
+        assert response.json() == mock_response_json
+
+        # Verify that commit and rollback were called
+        mock_commit.assert_awaited_once()
+        mock_rollback.assert_awaited_once()
