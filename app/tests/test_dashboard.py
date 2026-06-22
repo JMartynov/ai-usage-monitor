@@ -108,3 +108,73 @@ async def test_dashboard_api_stats():
 
     assert "recent_activity" in data
     assert len(data["recent_activity"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_dashboard_api_alerts_empty():
+    main_app.dependency_overrides[get_db] = override_get_db
+    transport = httpx.ASGITransport(app=main_app)
+    client = httpx.AsyncClient(transport=transport, base_url="http://test")
+
+    response = await client.get("/api/alerts")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 0
+
+
+@pytest.mark.asyncio
+async def test_dashboard_api_alerts_triggered():
+    main_app.dependency_overrides[get_db] = override_get_db
+
+    # Insert new logs that exceed thresholds
+    async with TestingSessionLocal() as session:
+        logs = [
+            RequestLog(
+                model="gpt-4",
+                prompt="expensive prompt",
+                prompt_tokens=100,
+                completion_tokens=200,
+                total_tokens=300,
+                estimated_cost=1.50, # Exceeds cost threshold of 1.00
+                timestamp=datetime.datetime.now(datetime.timezone.utc)
+            ),
+            RequestLog(
+                model="gpt-3.5-turbo",
+                prompt="large prompt",
+                prompt_tokens=50000,
+                completion_tokens=60000,
+                total_tokens=110000, # Exceeds token threshold of 100000
+                estimated_cost=0.50,
+                timestamp=datetime.datetime.now(datetime.timezone.utc)
+            )
+        ]
+        session.add_all(logs)
+        await session.commit()
+
+    transport = httpx.ASGITransport(app=main_app)
+    client = httpx.AsyncClient(transport=transport, base_url="http://test")
+
+    response = await client.get("/api/alerts")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 2
+
+    # Check the cost alert
+    cost_alert = next((a for a in data if a["type"] == "cost"), None)
+    assert cost_alert is not None
+    assert cost_alert["model"] == "gpt-4"
+    assert cost_alert["cost"] == 1.50
+    assert cost_alert["tokens"] == 300
+    assert "High cost detected: 1.5$ / 300 tokens" in cost_alert["message"]
+
+    # Check the budget/token alert
+    budget_alert = next((a for a in data if a["type"] == "budget"), None)
+    assert budget_alert is not None
+    assert budget_alert["model"] == "gpt-3.5-turbo"
+    assert budget_alert["cost"] == 0.50
+    assert budget_alert["tokens"] == 110000
+    assert "High token usage detected: 0.5$ / 110000 tokens" in budget_alert["message"]
