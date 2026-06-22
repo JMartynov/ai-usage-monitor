@@ -1,6 +1,7 @@
 import pytest
 import httpx
 import respx
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
@@ -88,7 +89,6 @@ async def test_successful_proxy():
 
     # 4. Verify database
     async with TestingSessionLocal() as session:
-        from sqlalchemy import select
         result = await session.execute(select(RequestLog))
         logs = result.scalars().all()
 
@@ -123,7 +123,6 @@ async def test_upstream_error():
     assert response.json() == {"error": "bad request"}
 
     async with TestingSessionLocal() as session:
-        from sqlalchemy import select
         result = await session.execute(select(RequestLog))
         logs = result.scalars().all()
         # Find the log for this specific test
@@ -152,7 +151,6 @@ async def test_timeout_error():
     assert "Timeout" in response.json()["error"]
 
     async with TestingSessionLocal() as session:
-        from sqlalchemy import select
         result = await session.execute(select(RequestLog))
         logs = result.scalars().all()
         log = [log_item for log_item in logs
@@ -185,7 +183,6 @@ async def test_missing_usage():
     assert response.json() == mock_response_json
 
     async with TestingSessionLocal() as session:
-        from sqlalchemy import select
         result = await session.execute(select(RequestLog))
         logs = result.scalars().all()
         # Find the log with no usage and no error
