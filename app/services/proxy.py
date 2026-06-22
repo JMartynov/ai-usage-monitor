@@ -101,7 +101,10 @@ async def forward_and_log(
         # In a real app we'd log this fallback error
 
     if error_message and upstream_status == 502:
-        return JSONResponse(status_code=502, content={"error": "Internal Server Error"})
+        return JSONResponse(
+            status_code=502,
+            content={"error": "Internal Server Error"}
+        )
 
     return Response(
         content=upstream_response_text,
