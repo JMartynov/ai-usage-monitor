@@ -10,3 +10,4 @@ respx
 pytest-httpx
 jinja2
 flake8
+asgi-lifespan
