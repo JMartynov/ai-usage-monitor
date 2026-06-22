@@ -42,7 +42,8 @@ async def setup_test_db():
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_successful_proxy():
+async def test_successful_proxy(monkeypatch):
+    monkeypatch.setenv('PROXY_API_KEY', 'test-key')
     # 1. Mock upstream (OpenAI)
     mock_url = "https://api.openai.com/v1/chat/completions"
     mock_response_json = {
@@ -106,7 +107,8 @@ async def test_successful_proxy():
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_upstream_error():
+async def test_upstream_error(monkeypatch):
+    monkeypatch.setenv('PROXY_API_KEY', 'test-key')
     mock_url = "https://api.openai.com/v1/chat/completions"
     respx.post(mock_url).mock(
         return_value=httpx.Response(
@@ -117,7 +119,11 @@ async def test_upstream_error():
     client = httpx.AsyncClient(transport=transport, base_url="http://test")
     payload = {"model": "gpt-3.5-turbo", "messages": []}
 
-    response = await client.post("/v1/chat/completions", json=payload)
+    response = await client.post(
+        "/v1/chat/completions",
+        json=payload,
+        headers={"Authorization": "Bearer test-key"}
+    )
 
     assert response.status_code == 400
     assert response.json() == {"error": "bad request"}
@@ -137,7 +143,8 @@ async def test_upstream_error():
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_timeout_error():
+async def test_timeout_error(monkeypatch):
+    monkeypatch.setenv('PROXY_API_KEY', 'test-key')
     mock_url = "https://api.openai.com/v1/chat/completions"
     respx.post(mock_url).mock(side_effect=httpx.TimeoutException("Timeout"))
 
@@ -145,7 +152,11 @@ async def test_timeout_error():
     client = httpx.AsyncClient(transport=transport, base_url="http://test")
     payload = {"model": "gpt-3.5-turbo", "messages": []}
 
-    response = await client.post("/v1/chat/completions", json=payload)
+    response = await client.post(
+        "/v1/chat/completions",
+        json=payload,
+        headers={"Authorization": "Bearer test-key"}
+    )
 
     assert response.status_code == 502
     assert "error" in response.json()
@@ -165,7 +176,8 @@ async def test_timeout_error():
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_missing_usage():
+async def test_missing_usage(monkeypatch):
+    monkeypatch.setenv('PROXY_API_KEY', 'test-key')
     mock_url = "https://api.openai.com/v1/chat/completions"
     mock_response_json = {
         "choices": [{"message": {"content": "Hello"}}],
@@ -179,7 +191,11 @@ async def test_missing_usage():
     payload = {"model": "gpt-3.5-turbo",
                "messages": [{"role": "user", "content": "Hi"}]}
 
-    response = await client.post("/v1/chat/completions", json=payload)
+    response = await client.post(
+        "/v1/chat/completions",
+        json=payload,
+        headers={"Authorization": "Bearer test-key"}
+    )
 
     assert response.status_code == 200
     assert response.json() == mock_response_json
@@ -201,7 +217,8 @@ async def test_missing_usage():
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_header_filtering():
+async def test_header_filtering(monkeypatch):
+    monkeypatch.setenv('PROXY_API_KEY', 'test-key')
     mock_url = "https://api.openai.com/v1/chat/completions"
     mock_response_json = {
         "choices": [{"message": {"content": "Hello"}}],
@@ -241,3 +258,48 @@ async def test_header_filtering():
     # The proxy removes "host", "content-length",
     # "connection", "accept-encoding".
     # X-Custom should be forwarded.
+
+
+@pytest.mark.asyncio
+async def test_missing_api_key_header(monkeypatch):
+    monkeypatch.setenv("PROXY_API_KEY", "test-key")
+    transport = httpx.ASGITransport(app=main_app)
+    client = httpx.AsyncClient(transport=transport, base_url="http://test")
+    payload = {"model": "gpt-3.5-turbo", "messages": []}
+
+    # No Authorization header
+    response = await client.post("/v1/chat/completions", json=payload)
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_invalid_api_key(monkeypatch):
+    monkeypatch.setenv('PROXY_API_KEY', 'test-key')
+    transport = httpx.ASGITransport(app=main_app)
+    client = httpx.AsyncClient(transport=transport, base_url="http://test")
+    payload = {"model": "gpt-3.5-turbo", "messages": []}
+
+    response = await client.post(
+        "/v1/chat/completions",
+        json=payload,
+        headers={"Authorization": "Bearer wrong-key"}
+    )
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid API Key"
+
+
+@pytest.mark.asyncio
+async def test_missing_env_api_key(monkeypatch):
+    # Ensure PROXY_API_KEY is not set
+    monkeypatch.delenv('PROXY_API_KEY', raising=False)
+    transport = httpx.ASGITransport(app=main_app)
+    client = httpx.AsyncClient(transport=transport, base_url="http://test")
+    payload = {"model": "gpt-3.5-turbo", "messages": []}
+
+    response = await client.post(
+        "/v1/chat/completions",
+        json=payload,
+        headers={"Authorization": "Bearer test-key"}
+    )
+    assert response.status_code == 500
+    assert "PROXY_API_KEY is missing" in response.json()["detail"]
