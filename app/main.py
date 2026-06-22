@@ -3,6 +3,7 @@ from fastapi import FastAPI, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .database import engine, Base, get_db
+from .schemas import ChatCompletionRequest
 from .services.proxy import forward_and_log
 from .routers.dashboard import router as dashboard_router
 
@@ -21,7 +22,7 @@ app.include_router(dashboard_router)
 
 @app.post("/v1/chat/completions")
 async def proxy_chat_completions(
-    payload: dict,  # Accept dict directly to avoid dropping fields
+    payload: ChatCompletionRequest,
     request: Request,
     db: AsyncSession = Depends(get_db)
 ):
@@ -30,7 +31,7 @@ async def proxy_chat_completions(
 
     # Send to proxy service
     return await forward_and_log(
-        payload=payload,
+        payload=payload.model_dump(exclude_unset=True),
         headers=headers,
         db=db
     )
