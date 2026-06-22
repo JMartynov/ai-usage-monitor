@@ -8,7 +8,6 @@ import sys
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 import uvicorn
-import signal
 
 # --- Mock Upstream Server ---
 mock_app = FastAPI()
