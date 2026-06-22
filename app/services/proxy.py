@@ -2,6 +2,7 @@ import json
 import time
 import uuid
 import httpx
+from typing import Tuple, Optional
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..models import RequestLog
@@ -14,16 +15,8 @@ OPENAI_API_URL = os.environ.get(
 )
 
 
-async def forward_and_log(
-    payload: dict,
-    headers: dict,
-    db: AsyncSession,
-) -> Response:
-    start_time = time.time()
-    request_id = str(uuid.uuid4())
-
-    # Filter headers (keep Authorization, omit Host, Content-Length)
-    proxy_headers = {
+def _filter_headers(headers: dict) -> dict:
+    return {
         k: v for k,
         v in headers.items() if k.lower() not in (
             "host",
@@ -31,10 +24,18 @@ async def forward_and_log(
             "connection",
             "accept-encoding")}
 
-    model = payload.get("model", "unknown")
-    messages = payload.get("messages", [])
-    prompt_text = json.dumps(messages)
 
+async def _call_upstream(
+    payload: dict,
+    proxy_headers: dict
+) -> Tuple[
+    int,
+    Optional[str],
+    Optional[int],
+    Optional[int],
+    Optional[int],
+    Optional[str]
+]:
     upstream_status = 500
     upstream_response_text = None
     prompt_tokens = None
@@ -67,19 +68,29 @@ async def forward_and_log(
         upstream_response_text = json.dumps({"error": str(e)})
         upstream_status = 502
 
-    end_time = time.time()
-    latency_ms = int((end_time - start_time) * 1000)
+    return (
+        upstream_status,
+        upstream_response_text,
+        prompt_tokens,
+        completion_tokens,
+        total_tokens,
+        error_message
+    )
 
-    estimated_cost = None
-    if not error_message and prompt_tokens is not None and \
-            completion_tokens is not None:
-        estimated_cost = calculate_cost(
-            model,
-            prompt_tokens,
-            completion_tokens
-        )
 
-    # Log to database
+async def _log_to_db(
+    db: AsyncSession,
+    request_id: str,
+    model: str,
+    prompt_text: str,
+    upstream_response_text: Optional[str],
+    prompt_tokens: Optional[int],
+    completion_tokens: Optional[int],
+    total_tokens: Optional[int],
+    estimated_cost: Optional[float],
+    latency_ms: int,
+    error_message: Optional[str]
+) -> None:
     log_entry = RequestLog(
         request_id=request_id,
         model=model,
@@ -99,6 +110,58 @@ async def forward_and_log(
     except Exception:
         await db.rollback()
         # In a real app we'd log this fallback error
+
+
+async def forward_and_log(
+    payload: dict,
+    headers: dict,
+    db: AsyncSession,
+) -> Response:
+    start_time = time.time()
+    request_id = str(uuid.uuid4())
+
+    # Filter headers (keep Authorization, omit Host, Content-Length)
+    proxy_headers = _filter_headers(headers)
+
+    model = payload.get("model", "unknown")
+    messages = payload.get("messages", [])
+    prompt_text = json.dumps(messages)
+
+    (
+        upstream_status,
+        upstream_response_text,
+        prompt_tokens,
+        completion_tokens,
+        total_tokens,
+        error_message
+    ) = await _call_upstream(payload, proxy_headers)
+
+    end_time = time.time()
+    latency_ms = int((end_time - start_time) * 1000)
+
+    estimated_cost = None
+    if not error_message and prompt_tokens is not None and \
+            completion_tokens is not None:
+        estimated_cost = calculate_cost(
+            model,
+            prompt_tokens,
+            completion_tokens
+        )
+
+    # Log to database
+    await _log_to_db(
+        db=db,
+        request_id=request_id,
+        model=model,
+        prompt_text=prompt_text,
+        upstream_response_text=upstream_response_text,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        total_tokens=total_tokens,
+        estimated_cost=estimated_cost,
+        latency_ms=latency_ms,
+        error_message=error_message
+    )
 
     if error_message and upstream_status == 502:
         return JSONResponse(status_code=502, content={"error": error_message})
