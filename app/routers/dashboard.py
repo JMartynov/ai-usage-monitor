@@ -8,9 +8,16 @@ from sqlalchemy import select, func, desc, text
 from ..database import get_db
 from ..models import RequestLog
 from typing import Dict, Any
+import time
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
+
+_stats_cache = {
+    "data": None,
+    "timestamp": 0
+}
+STATS_CACHE_TTL = 60  # seconds
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
@@ -20,6 +27,12 @@ async def dashboard(request: Request):
 
 @router.get("/api/stats")
 async def api_stats(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
+    current_time = time.time()
+    is_cached = _stats_cache["data"] is not None
+    is_fresh = (current_time - _stats_cache["timestamp"]) < STATS_CACHE_TTL
+    if is_cached and is_fresh:
+        return _stats_cache["data"]
+
     # 1. Total Usage
     total_requests_query = await db.execute(select(func.count(RequestLog.id)))
     total_requests = total_requests_query.scalar_one()
@@ -127,7 +140,7 @@ async def api_stats(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
         for row in expensive_requests_query
     ]
 
-    return {
+    result = {
         "total": {
             "requests": total_requests,
             "tokens": int(total_tokens),
@@ -139,6 +152,11 @@ async def api_stats(db: AsyncSession = Depends(get_db)) -> Dict[str, Any]:
         "recent_activity": recent_activity,
         "expensive_requests": expensive_requests
     }
+
+    _stats_cache["data"] = result
+    _stats_cache["timestamp"] = current_time
+
+    return result
 
 
 @router.get("/api/alerts")
