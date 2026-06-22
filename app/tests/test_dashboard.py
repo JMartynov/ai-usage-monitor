@@ -137,7 +137,7 @@ async def test_dashboard_api_alerts_triggered():
                 prompt_tokens=100,
                 completion_tokens=200,
                 total_tokens=300,
-                estimated_cost=1.50, # Exceeds cost threshold of 1.00
+                estimated_cost=1.50,  # Exceeds cost threshold of 1.00
                 timestamp=datetime.datetime.now(datetime.timezone.utc)
             ),
             RequestLog(
@@ -145,7 +145,7 @@ async def test_dashboard_api_alerts_triggered():
                 prompt="large prompt",
                 prompt_tokens=50000,
                 completion_tokens=60000,
-                total_tokens=110000, # Exceeds token threshold of 100000
+                total_tokens=110000,  # Exceeds token threshold of 100000
                 estimated_cost=0.50,
                 timestamp=datetime.datetime.now(datetime.timezone.utc)
             )
@@ -177,4 +177,7 @@ async def test_dashboard_api_alerts_triggered():
     assert budget_alert["model"] == "gpt-3.5-turbo"
     assert budget_alert["cost"] == 0.50
     assert budget_alert["tokens"] == 110000
-    assert "High token usage detected: 0.5$ / 110000 tokens" in budget_alert["message"]
+    assert (
+        "High token usage detected: 0.5$ / 110000 tokens"
+        in budget_alert["message"]
+    )
