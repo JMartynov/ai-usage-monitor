@@ -7,12 +7,22 @@ from .services.proxy import forward_and_log
 from .routers.dashboard import router as dashboard_router
 
 
+import httpx
+
+
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
     # Initialize DB schema
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+    # Initialize global HTTP client
+    app.state.http_client = httpx.AsyncClient()
+
     yield
+
+    # Teardown
+    await app.state.http_client.aclose()
 
 app = FastAPI(lifespan=lifespan)
 
@@ -28,9 +38,13 @@ async def proxy_chat_completions(
     # Extract headers
     headers = dict(request.headers)
 
+    # Get global HTTP client
+    client = request.app.state.http_client
+
     # Send to proxy service
     return await forward_and_log(
         payload=payload,
         headers=headers,
-        db=db
+        db=db,
+        client=client
     )
