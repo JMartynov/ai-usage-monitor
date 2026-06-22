@@ -42,3 +42,13 @@ def test_none_tokens_zero_cost():
     cost = calculate_cost(model, None, None)
 
     assert cost == 0.0
+
+
+def test_negative_tokens_zero_cost():
+    model = "gpt-4o"
+    prompt_tokens = -100
+    completion_tokens = -50
+
+    cost = calculate_cost(model, prompt_tokens, completion_tokens)
+
+    assert cost == 0.0
