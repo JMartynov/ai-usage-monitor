@@ -148,7 +148,13 @@ async def api_alerts(db: AsyncSession = Depends(get_db)):
     tokens_threshold = 100000
 
     alerts_query = await db.execute(
-        select(RequestLog)
+        select(
+            RequestLog.id,
+            RequestLog.estimated_cost,
+            RequestLog.total_tokens,
+            RequestLog.model,
+            RequestLog.timestamp
+        )
         .where(
             (RequestLog.estimated_cost > cost_threshold) |
             (RequestLog.total_tokens > tokens_threshold)
@@ -158,7 +164,7 @@ async def api_alerts(db: AsyncSession = Depends(get_db)):
     )
 
     alerts = []
-    for row in alerts_query.scalars():
+    for row in alerts_query:
         alert_type = "cost" if (
             row.estimated_cost and row.estimated_cost > cost_threshold
         ) else "budget"
