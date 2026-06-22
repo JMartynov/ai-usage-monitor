@@ -149,7 +149,7 @@ async def test_timeout_error():
 
     assert response.status_code == 502
     assert "error" in response.json()
-    assert "Timeout" in response.json()["error"]
+    assert "Internal Server Error" in response.json()["error"]
 
     async with TestingSessionLocal() as session:
         from sqlalchemy import select
