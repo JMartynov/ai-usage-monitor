@@ -13,6 +13,8 @@ OPENAI_API_URL = os.environ.get(
     "OPENAI_API_URL", "https://api.openai.com/v1/chat/completions"
 )
 
+EXCLUDED_HEADERS = {"host", "content-length", "connection", "accept-encoding"}
+
 
 async def forward_and_log(
     payload: dict,
@@ -25,11 +27,8 @@ async def forward_and_log(
     # Filter headers (keep Authorization, omit Host, Content-Length)
     proxy_headers = {
         k: v for k,
-        v in headers.items() if k.lower() not in (
-            "host",
-            "content-length",
-            "connection",
-            "accept-encoding")}
+        v in headers.items() if k.lower() not in EXCLUDED_HEADERS
+    }
 
     model = payload.get("model", "unknown")
     messages = payload.get("messages", [])
