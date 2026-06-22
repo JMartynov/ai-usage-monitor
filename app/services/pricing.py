@@ -5,9 +5,9 @@ def calculate_cost(
         model: str,
         prompt_tokens: int,
         completion_tokens: int) -> float:
-    if prompt_tokens is None:
+    if prompt_tokens is None or prompt_tokens < 0:
         prompt_tokens = 0
-    if completion_tokens is None:
+    if completion_tokens is None or completion_tokens < 0:
         completion_tokens = 0
 
     pricing = MODEL_PRICING.get(model, DEFAULT_PRICING)
